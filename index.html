@@ -653,7 +653,9 @@
         const elapsed = performance.now() - gameState.chargeStart;
         const progress = Math.min(elapsed / CHARGE_DURATION, 1);
         updateProgressRing(progress);
-        hintText.textContent = '辨識中… ' + Math.round(progress * 100) + '%';
+
+        var chargingIcon = gameState.chargingGesture >= 0 ? GESTURE_ICONS[gameState.chargingGesture] : '🤔';
+        hintText.textContent = chargingIcon + ' 辨識中… ' + Math.round(progress * 100) + '%';
 
         if (progress >= 1) {
             const task = gameState.tasks.find(
@@ -966,7 +968,7 @@
     // ============================================================
     // STABILIZER (debounce)
     // ============================================================
-    const STABLE_FRAMES_REQUIRED = 5;
+    const STABLE_FRAMES_REQUIRED = 10;
     let stableRaw = -1;
     let stableCount = 0;
     let stableConfirmed = -1;
@@ -1035,8 +1037,8 @@
         var palmWidth = dist(indexMcp, pinkyMcp);
         var thumbDist = dist(thumbTip, palmCenter);
 
-        // Both checks for robustness
-        return thumbAngle > 140 && thumbDist > palmWidth * 0.9;
+        // Both checks for robustness — strict threshold to avoid 3/4 being misread as 5
+        return thumbAngle > 150 && thumbDist > palmWidth * 1.0;
     }
 
     // ---- Count extended fingers (excluding thumb), orientation-robust ----
@@ -1094,15 +1096,16 @@
         }
 
         // Fallback: pure landmark-based classification
-        if (totalFingers === 0) return 0;
-        if (totalFingers === 5) return 5;
+        // Be conservative: only return 5 when ALL fingers are clearly extended
+        if (extendedFingers === 0 && !thumbOut) return 0;
+        if (extendedFingers === 4 && thumbOut) return 5;
         if (!thumbOut) {
             if (extendedFingers === 2) return 2;
             if (extendedFingers === 1) return 1;
             if (extendedFingers === 3) return 3;
             if (extendedFingers === 4) return 4;
         }
-
+        // Thumb out but not all 4 fingers → ambiguous, not 5
         return -1;
     }
 
