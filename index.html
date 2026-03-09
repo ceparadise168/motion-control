@@ -258,6 +258,118 @@
             50% { transform: translate(4px, -2px); }
             75% { transform: translate(-2px, 4px); }
         }
+
+        /* Share Button */
+        .share-btn {
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: #fff;
+            padding: 12px 36px;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: transform 0.2s, background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .share-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
+        .share-btn:active { transform: scale(0.98); }
+        .share-btn .share-icon {
+            font-size: 1.2em;
+        }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* Share Modal */
+        .share-modal-overlay {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 200;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .share-modal-overlay.visible { display: flex; }
+        .share-modal {
+            background: #1a1a2e;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        }
+        .share-modal-title {
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+        .qr-container {
+            background: #fff;
+            border-radius: 12px;
+            padding: 16px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        .qr-container canvas {
+            display: block;
+        }
+        .share-url {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: rgba(255,255,255,0.8);
+            font-size: clamp(0.7rem, 2vw, 0.85rem);
+            word-break: break-all;
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        .copy-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            padding: 12px 32px;
+            font-size: 1rem;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        .copy-btn:active { transform: scale(0.97); }
+        .close-modal-btn {
+            position: absolute;
+            top: 12px; right: 16px;
+            background: none; border: none;
+            color: rgba(255,255,255,0.5);
+            font-size: 1.5rem;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .close-modal-btn:hover { color: #fff; }
+        .copy-toast {
+            color: #00ff88;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .copy-toast.visible { opacity: 1; }
     </style>
 </head>
 <body>
@@ -267,6 +379,7 @@
         <div class="start-title">GESTURE COLLECTION</div>
         <div class="start-subtitle">Collect three hand gestures to complete your mission</div>
         <button id="start-btn">START</button>
+        <button class="share-btn" onclick="openShareModal()"><span class="share-icon">&#x1F517;</span>分享給朋友</button>
     </div>
 
     <!-- Camera -->
@@ -299,7 +412,22 @@
         <div class="success-title">MISSION COMPLETE!</div>
         <div class="success-cards" id="successCards"></div>
         <div class="logo-placeholder" id="logoArea"></div>
-        <button id="replay-btn">Play Again</button>
+        <div class="btn-row">
+            <button id="replay-btn">Play Again</button>
+            <button class="share-btn" onclick="openShareModal()"><span class="share-icon">&#x1F517;</span>分享</button>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="share-modal-overlay" id="shareModal">
+        <div class="share-modal">
+            <button class="close-modal-btn" onclick="closeShareModal()">&times;</button>
+            <div class="share-modal-title">分享給朋友</div>
+            <div class="qr-container" id="qrContainer"></div>
+            <div class="share-url" id="shareUrl"></div>
+            <button class="copy-btn" onclick="copyShareUrl()">複製連結</button>
+            <div class="copy-toast" id="copyToast">已複製！</div>
+        </div>
     </div>
 
     <!-- Libraries -->
@@ -308,6 +436,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 
     <script>
     // ============================================================
@@ -1035,6 +1164,69 @@
 
     replayBtn.addEventListener('click', function() {
         initGame();
+    });
+
+    // ============================================================
+    // SHARE
+    // ============================================================
+    const shareModal = document.getElementById('shareModal');
+    const shareUrlEl = document.getElementById('shareUrl');
+    const qrContainer = document.getElementById('qrContainer');
+    const copyToast = document.getElementById('copyToast');
+    let qrGenerated = false;
+
+    function getShareUrl() {
+        return window.location.href.split('?')[0].split('#')[0];
+    }
+
+    function openShareModal() {
+        const url = getShareUrl();
+        shareUrlEl.textContent = url;
+        shareModal.classList.add('visible');
+
+        if (!qrGenerated) {
+            qrContainer.textContent = '';
+            QRCode.toCanvas(url, {
+                width: 200,
+                margin: 0,
+                color: { dark: '#1a1a2e', light: '#ffffff' }
+            }, function(err, canvas) {
+                if (!err && canvas) {
+                    qrContainer.appendChild(canvas);
+                    qrGenerated = true;
+                }
+            });
+        }
+    }
+
+    function closeShareModal() {
+        shareModal.classList.remove('visible');
+        copyToast.classList.remove('visible');
+    }
+
+    function copyShareUrl() {
+        const url = getShareUrl();
+        navigator.clipboard.writeText(url).then(function() {
+            copyToast.classList.add('visible');
+            setTimeout(function() { copyToast.classList.remove('visible'); }, 2000);
+        }).catch(function() {
+            // Fallback for older browsers
+            var ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            copyToast.classList.add('visible');
+            setTimeout(function() { copyToast.classList.remove('visible'); }, 2000);
+        });
+    }
+
+    // Close modal on overlay click
+    shareModal.addEventListener('click', function(e) {
+        if (e.target === shareModal) closeShareModal();
     });
 
     </script>
