@@ -882,7 +882,8 @@
         }
 
         const landmarks = results.multiHandLandmarks[0];
-        const rawGesture = recognizeGesture(landmarks);
+        const handedness = results.multiHandedness[0].label;
+        const rawGesture = recognizeGesture(landmarks, handedness);
         const gesture = stabilize(rawGesture);
 
         updateCharge(gesture, true);
@@ -986,81 +987,123 @@
     // ============================================================
     // GESTURE RECOGNITION
     // ============================================================
-    // Check thumb extension using landmark distances
-    function isThumbExtended(landmarks) {
-        // Thumb tip (4) distance from palm base (0)
+    // ---- Utility: distance between two landmarks ----
+    function dist(a, b) {
+        return Math.sqrt(
+            Math.pow(a.x - b.x, 2) +
+            Math.pow(a.y - b.y, 2) +
+            Math.pow((a.z || 0) - (b.z || 0), 2)
+        );
+    }
+
+    // ---- Utility: angle at point B in triangle A-B-C (degrees) ----
+    function angleDeg(a, b, c) {
+        var ba = { x: a.x - b.x, y: a.y - b.y, z: (a.z||0) - (b.z||0) };
+        var bc = { x: c.x - b.x, y: c.y - b.y, z: (c.z||0) - (b.z||0) };
+        var dot = ba.x * bc.x + ba.y * bc.y + ba.z * bc.z;
+        var magBA = Math.sqrt(ba.x*ba.x + ba.y*ba.y + ba.z*ba.z);
+        var magBC = Math.sqrt(bc.x*bc.x + bc.y*bc.y + bc.z*bc.z);
+        if (magBA === 0 || magBC === 0) return 0;
+        var cosAngle = Math.max(-1, Math.min(1, dot / (magBA * magBC)));
+        return Math.acos(cosAngle) * 180 / Math.PI;
+    }
+
+    // ---- Check if a finger is extended using joint angles (orientation-robust) ----
+    // Finger is extended when MCP→PIP→TIP forms a roughly straight line (angle > threshold)
+    function isFingerExtended(landmarks, mcp, pip, tip) {
+        var angle = angleDeg(landmarks[mcp], landmarks[pip], landmarks[tip]);
+        return angle > 140;
+    }
+
+    // ---- Check thumb extension using distance ratio (orientation-robust) ----
+    function isThumbExtended(landmarks, handedness) {
         var thumbTip = landmarks[4];
-        var wrist = landmarks[0];
+        var thumbIp = landmarks[3];
+        var thumbMcp = landmarks[2];
         var indexMcp = landmarks[5];
         var pinkyMcp = landmarks[17];
 
-        // Palm width as reference
-        var palmWidth = Math.sqrt(
-            Math.pow(indexMcp.x - pinkyMcp.x, 2) +
-            Math.pow(indexMcp.y - pinkyMcp.y, 2)
-        );
+        // Method 1: angle-based — thumb MCP→IP→TIP straightness
+        var thumbAngle = angleDeg(landmarks[2], landmarks[3], landmarks[4]);
 
-        // Thumb tip to index MCP distance
-        var thumbToIndex = Math.sqrt(
-            Math.pow(thumbTip.x - indexMcp.x, 2) +
-            Math.pow(thumbTip.y - indexMcp.y, 2)
-        );
+        // Method 2: distance-based — thumb tip far from palm center
+        var palmCx = (indexMcp.x + pinkyMcp.x) / 2;
+        var palmCy = (indexMcp.y + pinkyMcp.y) / 2;
+        var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0)) / 2;
+        var palmCenter = { x: palmCx, y: palmCy, z: palmCz };
 
-        // Thumb extended when tip is far from index MCP relative to palm width
-        return thumbToIndex > palmWidth * 0.8;
+        var palmWidth = dist(indexMcp, pinkyMcp);
+        var thumbDist = dist(thumbTip, palmCenter);
+
+        // Both checks for robustness
+        return thumbAngle > 140 && thumbDist > palmWidth * 0.9;
     }
 
-    // Count extended fingers using landmarks (excluding thumb)
+    // ---- Count extended fingers (excluding thumb), orientation-robust ----
     function countExtendedFingers(landmarks) {
         var count = 0;
-        // Index: tip(8) vs pip(6)
-        if (landmarks[8].y < landmarks[6].y) count++;
-        // Middle: tip(12) vs pip(10)
-        if (landmarks[12].y < landmarks[10].y) count++;
-        // Ring: tip(16) vs pip(14)
-        if (landmarks[16].y < landmarks[14].y) count++;
-        // Pinky: tip(20) vs pip(18)
-        if (landmarks[20].y < landmarks[18].y) count++;
+        // Index: MCP(5) → PIP(6) → TIP(8)
+        if (isFingerExtended(landmarks, 5, 6, 8)) count++;
+        // Middle: MCP(9) → PIP(10) → TIP(12)
+        if (isFingerExtended(landmarks, 9, 10, 12)) count++;
+        // Ring: MCP(13) → PIP(14) → TIP(16)
+        if (isFingerExtended(landmarks, 13, 14, 16)) count++;
+        // Pinky: MCP(17) → PIP(18) → TIP(20)
+        if (isFingerExtended(landmarks, 17, 18, 20)) count++;
         return count;
     }
 
-    function recognizeGesture(landmarks) {
+    // ---- Main recognition: fingerpose + landmark post-processing ----
+    function recognizeGesture(landmarks, handedness) {
         // Convert MediaPipe {x,y,z} to fingerpose [[x,y,z],...] format
         const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
 
         const result = gestureEstimator.estimate(converted, GESTURE_MIN_SCORE);
 
-        if (result.gestures.length === 0) return -1;
-
-        // Pick highest score
-        let best = result.gestures[0];
-        for (let i = 1; i < result.gestures.length; i++) {
-            if (result.gestures[i].score > best.score) {
-                best = result.gestures[i];
-            }
-        }
-
-        var gestureName = best.name;
-
-        // Post-processing: use landmarks to verify thumb state
-        var thumbOut = isThumbExtended(landmarks);
+        // Landmark-based counting as ground truth
+        var thumbOut = isThumbExtended(landmarks, handedness);
         var extendedFingers = countExtendedFingers(landmarks);
+        var totalFingers = extendedFingers + (thumbOut ? 1 : 0);
 
-        // If fingerpose says open_palm but thumb is NOT extended → it's actually 3 or 4
-        if (gestureName === 'open_palm' && !thumbOut) {
-            if (extendedFingers === 4) return 4;
+        // If fingerpose has a result, use it but verify with landmarks
+        if (result.gestures.length > 0) {
+            let best = result.gestures[0];
+            for (let i = 1; i < result.gestures.length; i++) {
+                if (result.gestures[i].score > best.score) {
+                    best = result.gestures[i];
+                }
+            }
+
+            var gestureName = best.name;
+
+            // Correct misclassifications using landmark truth
+            if (gestureName === 'open_palm' && !thumbOut) {
+                // Fingerpose says 5 but thumb not out → 3 or 4
+                return extendedFingers >= 1 ? extendedFingers : -1;
+            }
+            if ((gestureName === 'three' || gestureName === 'four') && thumbOut && extendedFingers === 4) {
+                return 5;
+            }
+            if (gestureName === 'fist' && thumbOut && extendedFingers === 0) {
+                return -1; // thumbs up, not fist
+            }
+
+            return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
+                ? GESTURE_NAME_TO_INDEX[gestureName]
+                : -1;
+        }
+
+        // Fallback: pure landmark-based classification
+        if (totalFingers === 0) return 0;
+        if (totalFingers === 5) return 5;
+        if (!thumbOut) {
+            if (extendedFingers === 2) return 2;
+            if (extendedFingers === 1) return 1;
             if (extendedFingers === 3) return 3;
-            return -1;
+            if (extendedFingers === 4) return 4;
         }
 
-        // If fingerpose says three/four but thumb IS extended → it's actually 5
-        if ((gestureName === 'three' || gestureName === 'four') && thumbOut) {
-            if (extendedFingers === 4) return 5;
-        }
-
-        return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
-            ? GESTURE_NAME_TO_INDEX[gestureName]
-            : -1;
+        return -1;
     }
 
     // ============================================================
