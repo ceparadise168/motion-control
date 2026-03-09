@@ -1055,6 +1055,33 @@
         return count;
     }
 
+    // ---- Check if hand is a fist using fingertip-to-palm distance (orientation-robust) ----
+    function isFist(landmarks) {
+        var indexMcp = landmarks[5];
+        var pinkyMcp = landmarks[17];
+        var wrist = landmarks[0];
+
+        // Palm center
+        var palmCx = (indexMcp.x + pinkyMcp.x + wrist.x) / 3;
+        var palmCy = (indexMcp.y + pinkyMcp.y + wrist.y) / 3;
+        var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0) + (wrist.z||0)) / 3;
+        var palmCenter = { x: palmCx, y: palmCy, z: palmCz };
+
+        var palmWidth = dist(indexMcp, pinkyMcp);
+        if (palmWidth === 0) return false;
+
+        // All 4 fingertips must be close to palm center
+        var tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
+        var allClose = tips.every(function(tip) {
+            return dist(tip, palmCenter) < palmWidth * 1.2;
+        });
+
+        // Thumb tip also close to palm
+        var thumbClose = dist(landmarks[4], palmCenter) < palmWidth * 1.3;
+
+        return allClose && thumbClose;
+    }
+
     // ---- Main recognition: fingerpose + landmark post-processing ----
     function recognizeGesture(landmarks, handedness) {
         // Convert MediaPipe {x,y,z} to fingerpose [[x,y,z],...] format
@@ -1062,10 +1089,13 @@
 
         const result = gestureEstimator.estimate(converted, GESTURE_MIN_SCORE);
 
-        // Landmark-based counting as ground truth
+        // Landmark-based checks as ground truth
         var thumbOut = isThumbExtended(landmarks, handedness);
         var extendedFingers = countExtendedFingers(landmarks);
-        var totalFingers = extendedFingers + (thumbOut ? 1 : 0);
+        var fist = isFist(landmarks);
+
+        // Fist check takes priority — most reliable across all angles
+        if (fist) return 0;
 
         // If fingerpose has a result, use it but verify with landmarks
         if (result.gestures.length > 0) {
@@ -1080,7 +1110,6 @@
 
             // Correct misclassifications using landmark truth
             if (gestureName === 'open_palm' && !thumbOut) {
-                // Fingerpose says 5 but thumb not out → 3 or 4
                 return extendedFingers >= 1 ? extendedFingers : -1;
             }
             if ((gestureName === 'three' || gestureName === 'four') && thumbOut && extendedFingers === 4) {
@@ -1096,16 +1125,14 @@
         }
 
         // Fallback: pure landmark-based classification
-        // Be conservative: only return 5 when ALL fingers are clearly extended
-        if (extendedFingers === 0 && !thumbOut) return 0;
         if (extendedFingers === 4 && thumbOut) return 5;
         if (!thumbOut) {
+            if (extendedFingers === 0) return 0;
             if (extendedFingers === 2) return 2;
             if (extendedFingers === 1) return 1;
             if (extendedFingers === 3) return 3;
             if (extendedFingers === 4) return 4;
         }
-        // Thumb out but not all 4 fingers → ambiguous, not 5
         return -1;
     }
 
