@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime VFX Simulator - Ultimate Remaster</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
+    
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Bangers', sans-serif; }
+        
+        .input_video {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            object-fit: cover; z-index: 0; transform: scaleX(-1);
+        }
+        
+        /* 劇院級暗化濾鏡 - 讓光效更爆 */
+        .video-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0.4) 30%, rgba(0,0,0,0.85) 100%);
+            z-index: 1; pointer-events: none;
+        }
+
+        #canvas-container { position: absolute; top: 0; left: 0; z-index: 2; }
+
+        /* UI 層 */
+        .hud-container { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+        .technique-name {
+            position: absolute; bottom: 15%; left: 50%;
+            transform: translateX(-50%) scale(0.8);
+            font-size: 5rem; font-weight: 900; color: #fff;
+            text-shadow: 0 0 20px currentColor, 4px 4px 0 #000;
+            opacity: 0; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            white-space: nowrap; text-align: center;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-style: italic;
+        }
+        .technique-name.active { opacity: 1; transform: translateX(-50%) scale(1.2); }
+
+        .combo-list {
+            position: absolute; top: 20px; left: 20px;
+            color: rgba(255,255,255,0.9); font-size: 1rem;
+            background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px;
+            border-left: 4px solid #fff;
+        }
+        .combo-item span { color: #FFD700; font-weight: bold; margin-right: 8px; }
+
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        #start-btn {
+            background: #ff0055; color: #fff; border: none; padding: 20px 50px;
+            font-size: 2rem; font-family: 'Bangers'; cursor: pointer;
+            box-shadow: 0 0 30px #ff0055; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);
+        }
+        #start-btn:hover { transform: scale(1.1); background: #ff3377; }
+
+        /* 集中線 */
+        .speed-lines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-conic-gradient(from 0deg, transparent 0deg, transparent 10deg, rgba(255,255,255,0.1) 10.5deg, transparent 11deg);
+            z-index: 3; opacity: 0; pointer-events: none; mix-blend-mode: overlay;
+        }
+        
+        .shake { animation: shake 0.5s infinite; }
+        @keyframes shake { 0% { transform: translateX(-50%) translate(2px, 2px); } 50% { transform: translateX(-50%) translate(-2px, -2px); } 100% { transform: translateX(-50%) translate(2px, 2px); } }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen">
+        <h1 style="font-size: 4rem; color: #fff; text-shadow: 0 0 20px #ff0055; margin-bottom: 20px; font-family: 'Bangers'">ANIME VFX PRO</h1>
+        <button id="start-btn">ACTIVATE SYSTEM</button>
+        <p style="color:#aaa; margin-top:20px">請允許攝影機權限 • WebGL 2.0</p>
+    </div>
+
+    <video class="input_video" playsinline></video>
+    <div class="video-overlay"></div>
+    <div class="speed-lines" id="speedLines"></div>
+
+    <div class="hud-container">
+        <div class="combo-list">
+            <div class="combo-item"><span>[集氣]</span> 雙手握拳放腰間</div>
+            <div class="combo-item"><span>[元氣彈]</span> 雙手高舉過頭</div>
+            <div class="combo-item"><span>[螺旋丸]</span> 單手手掌向前</div>
+            <div class="combo-item"><span>[千鳥]</span> 雙手手腕靠近</div>
+            <div class="combo-item"><span>[光線]</span> 雙手交叉</div>
+        </div>
+        <div class="technique-name" id="techName"></div>
+    </div>
+    
+    <div id="canvas-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
+
+    <script>
+        // --- 核心配置 ---
+        const CONFIG = {
+            colors: {
+                gold: new THREE.Color(0xFFAA00),
+                blue: new THREE.Color(0x0088FF),
+                cyan: new THREE.Color(0x00FFFF),
+                lightning: new THREE.Color(0xEEFFFF),
+                beam: new THREE.Color(0xFF3366),
+                white: new THREE.Color(0xFFFFFF)
+            }
+        };
+
+        let scene, camera, renderer, clock;
+        let particles, particleGeo, positions, velocities, colors, sizes, phases;
+        let handsData = { left: null, right: null };
+        let currentMode = 'IDLE';
+        let activeHandWorld = new THREE.Vector3();
+        let isRunning = false;
+
+        // 特效物件群組
+        let rasenganMesh, spiritBombMesh, beamMesh, lightningLines;
+        
+        // --- 初始化 ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('start-screen').style.display = 'none';
+            init();
+        });
+
+        function init() {
+            if (isRunning) return; isRunning = true;
+
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 5000);
+            camera.position.z = 1000;
+            clock = new THREE.Clock();
+
+            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // 1. 建立特效核心模型 (Mesh)
+            createSpecialEffects();
+            
+            // 2. 建立粒子系統 (Particles)
+            createParticles();
+
+            // 3. 啟動循環
+            animate();
+            setupMediaPipe();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // --- 建立實體特效模型 ---
+        function createSpecialEffects() {
+            // A. 螺旋丸核心 (實體球 + 旋轉紋理)
+            const rasenganGeo = new THREE.SphereGeometry(60, 32, 32);
+            const rasenganMat = new THREE.MeshBasicMaterial({
+                color: 0x00FFFF,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                wireframe: true // 增加查克拉流動感
+            });
+            rasenganMesh = new THREE.Mesh(rasenganGeo, rasenganMat);
+            rasenganMesh.visible = false;
+            // 內核
+            const coreGeo = new THREE.SphereGeometry(30, 32, 32);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, blending: THREE.AdditiveBlending });
+            const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            rasenganMesh.add(coreMesh);
+            scene.add(rasenganMesh);
+
+            // B. 元氣彈核心 (巨大球體)
+            const spiritGeo = new THREE.SphereGeometry(300, 64, 64);
+            const spiritMat = new THREE.MeshBasicMaterial({
+                color: 0x0088FF,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            spiritBombMesh = new THREE.Mesh(spiritGeo, spiritMat);
+            spiritBombMesh.visible = false;
+            scene.add(spiritBombMesh);
+
+            // C. 斯佩修姆光線 (圓柱體)
+            const beamGeo = new THREE.CylinderGeometry(30, 60, 2000, 32, 1, true);
+            beamGeo.translate(0, 1000, 0); // Pivot at bottom
+            beamGeo.rotateZ(Math.PI / 2);  // Point Left
+            const beamMat = new THREE.MeshBasicMaterial({
+                color: 0xFF3366,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+            beamMesh = new THREE.Mesh(beamGeo, beamMat);
+            beamMesh.visible = false;
+            // 光束核心亮白
+            const beamCoreGeo = new THREE.CylinderGeometry(10, 10, 2000, 16, 1, true);
+            beamCoreGeo.translate(0, 1000, 0);
+            beamCoreGeo.rotateZ(Math.PI / 2);
+            const beamCoreMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, blending: THREE.AdditiveBlending });
+            beamMesh.add(new THREE.Mesh(beamCoreGeo, beamCoreMat));
+            scene.add(beamMesh);
+
+            // D. 千鳥雷電 (LineSegments)
+            // 預先建立一些線段，之後在 animate 更新頂點
+            const lightningGeo = new THREE.BufferGeometry();
+            const lightningCount = 50; // 50條閃電
+            const lPos = new Float32Array(lightningCount * 6); // 每條線2個點 * 3座標
+            lightningGeo.setAttribute('position', new THREE.BufferAttribute(lPos, 3));
+            const lightningMat = new THREE.LineBasicMaterial({ color: 0xEEFFFF, blending: THREE.AdditiveBlending, linewidth: 2 });
+            lightningLines = new THREE.LineSegments(lightningGeo, lightningMat);
+            lightningLines.visible = false;
+            scene.add(lightningLines);
+        }
+
+        function createParticles() {
+            const count = 3000;
+            particleGeo = new THREE.BufferGeometry();
+            positions = new Float32Array(count * 3);
+            velocities = new Float32Array(count * 3);
+            colors = new Float32Array(count * 3);
+            sizes = new Float32Array(count);
+            phases = new Float32Array(count); // 用於隨機閃爍相位
+
+            for(let i=0; i<count; i++) {
+                resetParticle(i);
+                phases[i] = Math.random() * Math.PI * 2;
+            }
+
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            particleGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const sprite = generateGlowSprite();
+            const material = new THREE.PointsMaterial({
+                size: 20, map: sprite,
+                vertexColors: true, blending: THREE.AdditiveBlending,
+                depthWrite: false, transparent: true, opacity: 0.9
+            });
+
+            particles = new THREE.Points(particleGeo, material);
+            scene.add(particles);
+        }
+
+        // --- 動畫核心 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            detectGesture();
+            updateEffects(time, dt);
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 特效邏輯更新 ---
+        function updateEffects(time, dt) {
+            // 1. 更新粒子
+            const pos = particleGeo.attributes.position.array;
+            const col = particleGeo.attributes.color.array;
+            const sz = particleGeo.attributes.size.array;
+            
+            // 預設關閉所有 Mesh，依模式開啟
+            rasenganMesh.visible = false;
+            spiritBombMesh.visible = false;
+            beamMesh.visible = false;
+            lightningLines.visible = false;
+
+            // 模式處理
+            if (currentMode === 'RASENGAN') {
+                rasenganMesh.visible = true;
+                rasenganMesh.position.copy(activeHandWorld);
+                rasenganMesh.rotation.z -= 0.5; // 高速旋轉
+                rasenganMesh.rotation.x += 0.2;
+                
+                // 粒子：螺旋外殼
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    // 粒子圍繞球體旋轉
+                    const dx = pos[idx] - activeHandWorld.x;
+                    const dy = pos[idx+1] - activeHandWorld.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    // 吸入與旋轉力
+                    if (dist > 80) { // 在球體外
+                        // 向中心吸入
+                        velocities[idx] += (activeHandWorld.x - pos[idx]) * 0.05;
+                        velocities[idx+1] += (activeHandWorld.y - pos[idx+1]) * 0.05;
+                    } else {
+                        // 在球體邊緣高速旋轉 (Tangent)
+                        velocities[idx] += -dy * 0.5;
+                        velocities[idx+1] += dx * 0.5;
+                    }
+                    
+                    // 顏色：青色
+                    col[idx] = 0; col[idx+1] = 1; col[idx+2] = 1;
+                    
+                    // 物理更新
+                    pos[idx] += velocities[idx] * dt * 10;
+                    pos[idx+1] += velocities[idx+1] * dt * 10;
+                    
+                    // 阻尼與重置
+                    velocities[idx] *= 0.9;
+                    velocities[idx+1] *= 0.9;
+                    if (dist > 300 || dist < 10) resetParticleTo(i, activeHandWorld, 200);
+                }
+
+            } else if (currentMode === 'SPIRIT') {
+                spiritBombMesh.visible = true;
+                // 固定在頭頂上方
+                const targetPos = new THREE.Vector3(0, 400, -200); 
+                spiritBombMesh.position.copy(targetPos);
+                // 脈動效果
+                const scale = 1 + Math.sin(time * 5) * 0.05;
+                spiritBombMesh.scale.set(scale, scale, scale);
+
+                // 粒子：長距離吸入
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    const tx = targetPos.x;
+                    const ty = targetPos.y;
+                    
+                    // 吸入
+                    velocities[idx] += (tx - pos[idx]) * 0.01;
+                    velocities[idx+1] += (ty - pos[idx+1]) * 0.01;
+                    
+                    // 藍色
+                    col[idx] = 0.2; col[idx+1] = 0.6; col[idx+2] = 1;
+
+                    pos[idx] += velocities[idx] * dt * 20;
+                    pos[idx+1] += velocities[idx+1] * dt * 20;
+                    
+                    if (Math.abs(pos[idx]-tx) < 50 && Math.abs(pos[idx+1]-ty) < 50) {
+                        resetParticleTo(i, targetPos, 1500); // 從遠處重生
+                    }
+                }
+
+            } else if (currentMode === 'CHARGE') {
+                // 粒子：火焰狀上升
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    // 向上加速
+                    velocities[idx+1] += 2; 
+                    // 左右搖擺 (火焰)
+                    velocities[idx] += Math.sin(time * 10 + i) * 1;
+
+                    // 金色
+                    col[idx] = 1; col[idx+1] = 0.8; col[idx+2] = 0;
+                    
+                    pos[idx] += velocities[idx] * dt * 10;
+                    pos[idx+1] += velocities[idx+1] * dt * 10;
+
+                    // 循環
+                    if (pos[idx+1] > 600) {
+                        pos[idx] = (Math.random()-0.5) * 400; // 身體寬度
+                        pos[idx+1] = -500;
+                        velocities[idx] = 0; velocities[idx+1] = 0;
+                    }
+                }
+
+            } else if (currentMode === 'CHIDORI') {
+                lightningLines.visible = true;
+                // 更新閃電幾何
+                const lPos = lightningLines.geometry.attributes.position.array;
+                const center = activeHandWorld;
+                
+                for(let i=0; i<50; i++) { // 50條線
+                    // 起點：手部中心
+                    lPos[i*6] = center.x;
+                    lPos[i*6+1] = center.y;
+                    lPos[i*6+2] = center.z;
+                    
+                    // 終點：隨機射出，帶有抖動
+                    const angle = Math.random() * Math.PI * 2;
+                    const len = 100 + Math.random() * 150;
+                    lPos[i*6+3] = center.x + Math.cos(angle) * len + (Math.random()-0.5)*50;
+                    lPos[i*6+4] = center.y + Math.sin(angle) * len + (Math.random()-0.5)*50;
+                    lPos[i*6+5] = center.z + (Math.random()-0.5)*100;
+                }
+                lightningLines.geometry.attributes.position.needsUpdate = true;
+
+                // 粒子：伴隨的火花
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    if (Math.random() > 0.95) resetParticleTo(i, activeHandWorld, 10);
+                    
+                    // 爆炸式移動
+                    pos[idx] += velocities[idx] * dt * 60; // 極快
+                    pos[idx+1] += velocities[idx+1] * dt * 60;
+                    
+                    // 白藍色閃爍
+                    col[idx] = 0.8; col[idx+1] = 0.9; col[idx+2] = 1;
+                    if (Math.random()>0.5) col[idx]=1; // 隨機全白
+
+                    velocities[idx] *= 0.9; // 快速阻尼
+                }
+
+            } else if (currentMode === 'BEAM') {
+                beamMesh.visible = true;
+                beamMesh.position.copy(activeHandWorld);
+                // 讓光束稍微抖動
+                beamMesh.scale.set(1 + Math.random()*0.2, 1, 1 + Math.random()*0.2);
+                
+                // 粒子：光束周圍的螺旋
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    // 沿著光束方向 (-X) 移動
+                    velocities[idx] = -50; 
+                    
+                    // 重置到發射點
+                    if (pos[idx] < -window.innerWidth) {
+                        pos[idx] = activeHandWorld.x;
+                        pos[idx+1] = activeHandWorld.y + (Math.random()-0.5)*50;
+                        pos[idx+2] = activeHandWorld.z + (Math.random()-0.5)*50;
+                    }
+                    
+                    // 粉紅色
+                    col[idx] = 1; col[idx+1] = 0.2; col[idx+2] = 0.5;
+
+                    pos[idx] += velocities[idx] * dt * 20;
+                }
+                
+            } else {
+                // IDLE: 飄浮光塵
+                for(let i=0; i<3000; i++) {
+                    const idx = i*3;
+                    pos[idx] += Math.sin(time + i)*0.5;
+                    pos[idx+1] += Math.cos(time + i)*0.5;
+                    col[idx] = 1; col[idx+1] = 1; col[idx+2] = 1;
+                    sz[i] = 10 + Math.sin(time*5 + i)*5; // 呼吸燈
+                }
+            }
+
+            particleGeo.attributes.position.needsUpdate = true;
+            particleGeo.attributes.color.needsUpdate = true;
+            particleGeo.attributes.size.needsUpdate = true;
+        }
+
+        // --- 輔助函式 ---
+        function resetParticle(i) {
+            positions[i*3] = (Math.random()-0.5)*2000;
+            positions[i*3+1] = (Math.random()-0.5)*1000;
+            positions[i*3+2] = (Math.random()-0.5)*1000;
+            velocities[i*3] = (Math.random()-0.5)*2;
+            velocities[i*3+1] = (Math.random()-0.5)*2;
+            velocities[i*3+2] = 0;
+            sizes[i] = 10 + Math.random()*20;
+        }
+
+        function resetParticleTo(i, posVec, spread) {
+            positions[i*3] = posVec.x + (Math.random()-0.5) * spread;
+            positions[i*3+1] = posVec.y + (Math.random()-0.5) * spread;
+            positions[i*3+2] = posVec.z + (Math.random()-0.5) * spread;
+            // 給予隨機爆炸速度
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 5 + 2;
+            velocities[i*3] = Math.cos(angle) * speed;
+            velocities[i*3+1] = Math.sin(angle) * speed;
+            velocities[i*3+2] = (Math.random()-0.5) * speed;
+        }
+
+        function generateGlowSprite() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const g = ctx.createRadialGradient(32,32,0,32,32,32);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            g.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g; ctx.fillRect(0,0,64,64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- 手勢判定 (沿用優化版) ---
+        function detectGesture() {
+            if (!handsData.left && !handsData.right) { setMode('IDLE'); return; }
+
+            const rh = handsData.right ? handsData.right.raw : null;
+            const lh = handsData.left ? handsData.left.raw : null;
+            let newMode = 'IDLE';
+
+            // 輔助變數
+            const rhHigh = rh && rh[9].y < 0.45;
+            const lhHigh = lh && lh[9].y < 0.45;
+            const rhLow = rh && rh[9].y > 0.55;
+            const lhLow = lh && lh[9].y > 0.55;
+
+            // 判定邏輯
+            if (rhHigh && lhHigh) {
+                newMode = 'SPIRIT';
+            } else if (rh && lh && Math.hypot(rh[0].x - lh[0].x, rh[0].y - lh[0].y) < 0.2) {
+                // 手腕非常靠近且在身體前方 -> 千鳥
+                newMode = 'CHIDORI';
+                activeHandWorld = handsData.right.world; // 預設右手發電
+            } else if (rh && lh && Math.abs(rh[9].x - lh[9].x) < 0.3 && Math.abs(rh[9].y - lh[9].y) < 0.3 && rh[9].y > 0.4) {
+                 // 雙手交叉或重疊 -> 光線
+                 newMode = 'BEAM';
+                 activeHandWorld = {
+                    x: (handsData.right.world.x + handsData.left.world.x)/2,
+                    y: (handsData.right.world.y + handsData.left.world.y)/2,
+                    z: 0
+                 };
+            } else if (rhLow && lhLow) {
+                newMode = 'CHARGE';
+            } else {
+                // 單手判定
+                if (rh && Math.abs(rh[9].x - 0.5) < 0.4 && Math.abs(rh[9].y - 0.5) < 0.4) {
+                    newMode = 'RASENGAN';
+                    activeHandWorld = handsData.right.world;
+                } else if (lh && Math.abs(lh[9].x - 0.5) < 0.4 && Math.abs(lh[9].y - 0.5) < 0.4) {
+                    newMode = 'RASENGAN';
+                    activeHandWorld = handsData.left.world;
+                }
+            }
+
+            setMode(newMode);
+        }
+
+        function setMode(mode) {
+            if (currentMode === mode) return;
+            currentMode = mode;
+            
+            const txt = document.getElementById('techName');
+            const sl = document.getElementById('speedLines');
+            txt.classList.remove('active');
+            sl.style.opacity = 0;
+            
+            let name = "", color = "#fff";
+            
+            switch(mode) {
+                case 'CHARGE': name="スーパーチャージ (CHARGE)"; color=CONFIG.colors.gold.getStyle(); sl.style.opacity=0.4; break;
+                case 'SPIRIT': name="元気玉 (SPIRIT BOMB)"; color=CONFIG.colors.blue.getStyle(); sl.style.opacity=0.3; break;
+                case 'RASENGAN': name="螺旋丸 (RASENGAN)"; color=CONFIG.colors.cyan.getStyle(); break;
+                case 'CHIDORI': name="千鳥 (CHIDORI)"; color="#fff"; sl.style.opacity=0.8; break;
+                case 'BEAM': name="スペシウム光線 (BEAM)"; color=CONFIG.colors.beam.getStyle(); sl.style.opacity=1; break;
+            }
+
+            if(name) {
+                txt.innerText = name;
+                txt.style.color = color;
+                txt.style.textShadow = `0 0 20px ${color}`;
+                txt.classList.add('active');
+            } else {
+                txt.innerText = "";
+            }
+        }
+
+        // --- MediaPipe Setup (保持不變) ---
+        function setupMediaPipe() {
+            const videoElement = document.getElementsByClassName('input_video')[0];
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`});
+            hands.setOptions({maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5});
+            hands.onResults(results => {
+                handsData.left = null; handsData.right = null;
+                if (results.multiHandLandmarks) {
+                    for (const [index, landmarks] of results.multiHandLandmarks.entries()) {
+                        const label = results.multiHandedness[index].label;
+                        const wx = (0.5 - landmarks[9].x) * window.innerWidth * 1.5;
+                        const wy = (0.5 - landmarks[9].y) * window.innerHeight * 1.5;
+                        const wz = -landmarks[9].z * 1000;
+                        const obj = { raw: landmarks, world: {x: wx, y: wy, z: wz} };
+                        if (label === 'Left') handsData.left = obj;
+                        if (label === 'Right') handsData.right = obj;
+                    }
+                }
+            });
+            const cam = new Camera(videoElement, {onFrame: async () => { await hands.send({image: videoElement}); }, width: 1280, height: 720});
+            cam.start();
+        }
+    </script>
+</body>
+</html>

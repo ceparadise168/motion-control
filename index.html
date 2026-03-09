@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gesture Collection Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Noto Sans TC', sans-serif;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Camera layer */
+        .camera-video {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            object-fit: cover; z-index: 0;
+            transform: scaleX(-1);
+        }
+
+        .camera-overlay {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 1; pointer-events: none;
+        }
+
+        #three-container {
+            position: fixed; top: 0; left: 0;
+            z-index: 2; pointer-events: none;
+        }
+
+        /* HUD */
+        .hud {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            padding-top: max(20px, env(safe-area-inset-top));
+        }
+
+        /* Start Screen */
+        #start-screen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            z-index: 100;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            gap: 30px;
+        }
+        .start-title {
+            font-size: clamp(2rem, 6vw, 4rem);
+            font-weight: 900; color: #fff;
+            text-align: center; line-height: 1.3;
+        }
+        .start-subtitle {
+            font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+            color: rgba(255,255,255,0.6);
+            text-align: center;
+            max-width: 400px; padding: 0 20px;
+        }
+        #start-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff; border: none;
+            padding: 16px 48px;
+            font-size: clamp(1.2rem, 3vw, 1.5rem);
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+        #start-btn:hover { transform: scale(1.05); box-shadow: 0 6px 30px rgba(102, 126, 234, 0.6); }
+        #start-btn:active { transform: scale(0.98); }
+
+        /* Task Panel */
+        .task-panel {
+            display: flex; gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .task-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 10px 14px;
+            text-align: center;
+            min-width: min(100px, 28vw);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .task-card.active {
+            border-color: rgba(255, 215, 0, 0.8);
+            background: rgba(255, 215, 0, 0.15);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+        .task-card.collected {
+            border-color: rgba(0, 255, 136, 0.8);
+            background: rgba(0, 255, 136, 0.15);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        .task-card .gesture-icon {
+            font-size: clamp(2rem, 5vw, 3rem);
+            display: block; margin-bottom: 4px;
+        }
+        .task-card .theme-label {
+            font-size: clamp(0.7rem, 2vw, 0.9rem);
+            color: rgba(255,255,255,0.8);
+            font-weight: 700;
+        }
+        .task-card .check-mark {
+            display: none;
+            position: absolute; top: 6px; right: 8px;
+            color: #00ff88; font-size: 1.2rem; font-weight: bold;
+        }
+        .task-card.collected .check-mark { display: block; }
+
+        /* Center Display */
+        .center-display {
+            flex: 1;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        .progress-ring-container {
+            position: relative;
+            width: clamp(120px, 30vw, 180px);
+            height: clamp(120px, 30vw, 180px);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .progress-ring {
+            transform: rotate(-90deg);
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+        .progress-ring circle { fill: none; stroke-width: 6; }
+        .progress-ring .bg { stroke: rgba(255,255,255,0.15); }
+        .progress-ring .fg {
+            stroke: #FFD700;
+            stroke-linecap: round;
+            stroke-dasharray: 440;
+            stroke-dashoffset: 440;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+        .detected-gesture {
+            font-size: clamp(3rem, 10vw, 6rem);
+            color: #fff; opacity: 0.3;
+            transition: opacity 0.3s;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+        }
+        .detected-gesture.matching { opacity: 1; }
+
+        /* Bottom hint */
+        .hint-text {
+            font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+            color: rgba(255,255,255,0.7);
+            text-align: center;
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+            margin-bottom: 20px;
+        }
+
+        /* Success Screen */
+        #success-screen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            justify-content: center; align-items: center;
+            gap: 20px;
+        }
+        .success-overlay {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: -1;
+        }
+        .success-title {
+            font-size: clamp(2rem, 7vw, 4rem);
+            font-weight: 900; color: #fff;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+            animation: successPulse 2s ease-in-out infinite;
+        }
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .success-cards {
+            display: flex; gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .success-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 2px solid rgba(0, 255, 136, 0.6);
+            border-radius: 16px;
+            padding: 12px 16px;
+            text-align: center;
+            min-width: min(100px, 28vw);
+        }
+        .success-card .gesture-icon { font-size: clamp(2rem, 5vw, 3rem); display: block; margin-bottom: 6px; }
+        .success-card .theme-label { font-size: clamp(0.8rem, 2.5vw, 1rem); color: #00ff88; font-weight: 700; }
+
+        .logo-placeholder {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.4);
+        }
+
+        #replay-btn {
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: #fff; padding: 12px 36px;
+            font-size: 1.1rem;
+            font-family: 'Noto Sans TC', sans-serif;
+            font-weight: 700;
+            border-radius: 50px;
+            cursor: pointer; pointer-events: auto;
+            transition: transform 0.2s, background 0.2s;
+        }
+        #replay-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
+
+        /* Overlays */
+        .speed-lines {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: repeating-conic-gradient(from 0deg, transparent 0deg, transparent 10deg, rgba(255,255,255,0.08) 10.5deg, transparent 11deg);
+            z-index: 3; opacity: 0; pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .screen-flash {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #fff; z-index: 45;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.1s;
+        }
+
+        .shake { animation: shake 0.5s ease-in-out; }
+        @keyframes shake {
+            0%, 100% { transform: translate(0); }
+            25% { transform: translate(-4px, 2px); }
+            50% { transform: translate(4px, -2px); }
+            75% { transform: translate(-2px, 4px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+        <div class="start-title">GESTURE COLLECTION</div>
+        <div class="start-subtitle">Collect three hand gestures to complete your mission</div>
+        <button id="start-btn">START</button>
+    </div>
+
+    <!-- Camera -->
+    <video class="camera-video" playsinline autoplay muted></video>
+    <div class="camera-overlay"></div>
+    <div class="speed-lines" id="speedLines"></div>
+    <div class="screen-flash" id="screenFlash"></div>
+
+    <!-- Three.js -->
+    <div id="three-container"></div>
+
+    <!-- Game HUD -->
+    <div class="hud" id="gameHud" style="display:none;">
+        <div class="task-panel" id="taskPanel"></div>
+        <div class="center-display">
+            <div class="progress-ring-container">
+                <svg class="progress-ring" viewBox="0 0 150 150">
+                    <circle class="bg" cx="75" cy="75" r="70"/>
+                    <circle class="fg" id="progressCircle" cx="75" cy="75" r="70"/>
+                </svg>
+                <div class="detected-gesture" id="detectedGesture">?</div>
+            </div>
+        </div>
+        <div class="hint-text" id="hintText">Show your hand to the camera</div>
+    </div>
+
+    <!-- Success Screen -->
+    <div id="success-screen">
+        <div class="success-overlay"></div>
+        <div class="success-title">MISSION COMPLETE!</div>
+        <div class="success-cards" id="successCards"></div>
+        <div class="logo-placeholder" id="logoArea"></div>
+        <button id="replay-btn">Play Again</button>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
+
+    <script>
+    // ============================================================
+    // CONFIG
+    // ============================================================
+    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83E\uDD1F', '\uD83D\uDD96', '\uD83D\uDD90\uFE0F'];
+    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Three (3)', 'Four (4)', 'Five (5)'];
+    const THEME_LABELS_ZH = ['勢在必行', '不是這個', '覺醒', '也不是這個', '再加油一下', '自省'];
+    const FIXED_GESTURES = [5, 2, 0];
+    const CHARGE_DURATION = 2500;
+
+    // ============================================================
+    // DOM REFS
+    // ============================================================
+    const startScreen = document.getElementById('start-screen');
+    const startBtn = document.getElementById('start-btn');
+    const gameHud = document.getElementById('gameHud');
+    const taskPanel = document.getElementById('taskPanel');
+    const detectedGestureEl = document.getElementById('detectedGesture');
+    const progressCircle = document.getElementById('progressCircle');
+    const hintText = document.getElementById('hintText');
+    const successScreen = document.getElementById('success-screen');
+    const successCards = document.getElementById('successCards');
+    const speedLines = document.getElementById('speedLines');
+    const screenFlash = document.getElementById('screenFlash');
+    const replayBtn = document.getElementById('replay-btn');
+
+    // ============================================================
+    // GAME STATE
+    // ============================================================
+    const gameState = {
+        phase: 'START',
+        tasks: [],
+        currentGesture: -1,
+        chargeStart: 0,
+        chargingGesture: -1,
+    };
+
+    // ============================================================
+    // GAME INIT
+    // ============================================================
+    function initGame() {
+        gameState.tasks = FIXED_GESTURES.map((g) => ({
+            gesture: g,
+            themeZh: THEME_LABELS_ZH[g],
+            collected: false,
+        }));
+
+        gameState.phase = 'PLAYING';
+        gameState.currentGesture = -1;
+        gameState.chargeStart = 0;
+        gameState.chargingGesture = -1;
+        stableRaw = -1;
+        stableCount = 0;
+        stableConfirmed = -1;
+        revealCooldown = false;
+        wrongHintIndex = 0;
+
+        renderTaskPanel();
+        startScreen.style.display = 'none';
+        gameHud.style.display = 'flex';
+        successScreen.style.display = 'none';
+        speedLines.style.opacity = '0';
+        detectedGestureEl.textContent = '?';
+        detectedGestureEl.classList.remove('matching');
+        updateProgressRing(0);
+        hintText.textContent = '\u5C07\u624B\u638C\u5C0D\u6E96\u93E1\u982D';
+    }
+
+    function renderTaskPanel() {
+        taskPanel.textContent = '';
+        gameState.tasks.forEach((task, i) => {
+            const card = document.createElement('div');
+            card.className = 'task-card' + (task.collected ? ' collected' : '');
+            card.id = 'task-card-' + i;
+
+            const icon = document.createElement('span');
+            icon.className = 'gesture-icon';
+            icon.textContent = task.collected ? GESTURE_ICONS[task.gesture] : '❓';
+
+            const label = document.createElement('div');
+            label.className = 'theme-label';
+            label.textContent = task.collected ? task.themeZh : '???';
+
+            const check = document.createElement('span');
+            check.className = 'check-mark';
+            check.textContent = '\u2713';
+
+            card.appendChild(icon);
+            card.appendChild(label);
+            card.appendChild(check);
+            taskPanel.appendChild(card);
+        });
+    }
+
+    // ============================================================
+    // CHARGE LOGIC
+    // ============================================================
+    const WRONG_GESTURE_HINTS = ['再試試看！', '不是這個哦', '換一個手勢吧', '再加油一下', '也不是這個'];
+    let wrongHintIndex = 0;
+    let revealCooldown = false;
+
+    function updateCharge(detectedFingers, handVisible) {
+        if (gameState.phase !== 'PLAYING') return;
+        if (revealCooldown) return;
+
+        gameState.currentGesture = detectedFingers;
+
+        // Hand visible with any stable gesture (including -1) → charge
+        if (handVisible && detectedFingers !== undefined) {
+            const isNewGesture = gameState.chargingGesture !== detectedFingers;
+
+            if (detectedFingers >= 0) {
+                // Recognized gesture — start or continue charging
+                if (isNewGesture) {
+                    gameState.chargingGesture = detectedFingers;
+                    gameState.chargeStart = performance.now();
+                }
+                detectedGestureEl.classList.add('matching');
+                detectedGestureEl.textContent = GESTURE_ICONS[detectedFingers];
+
+                // Highlight matching card (if any)
+                const matchingTask = gameState.tasks.find(t => t.gesture === detectedFingers && !t.collected);
+                gameState.tasks.forEach((t, i) => {
+                    const card = document.getElementById('task-card-' + i);
+                    if (matchingTask && t === matchingTask) {
+                        card.classList.add('active');
+                    } else {
+                        card.classList.remove('active');
+                    }
+                });
+            } else {
+                // Hand visible but unrecognized gesture — also charge
+                if (isNewGesture) {
+                    gameState.chargingGesture = detectedFingers;
+                    gameState.chargeStart = performance.now();
+                }
+                detectedGestureEl.classList.add('matching');
+                detectedGestureEl.textContent = '🤔';
+
+                gameState.tasks.forEach((t, i) => {
+                    document.getElementById('task-card-' + i).classList.remove('active');
+                });
+            }
+        } else {
+            // No hand — reset
+            detectedGestureEl.classList.remove('matching');
+            detectedGestureEl.textContent = '?';
+            resetCharge();
+            gameState.tasks.forEach((t, i) => {
+                document.getElementById('task-card-' + i).classList.remove('active');
+            });
+            const uncollected = gameState.tasks.filter(t => !t.collected);
+            if (uncollected.length > 0) {
+                const needed = uncollected.map(() => '❓').join(' ');
+                hintText.textContent = '還有 ' + uncollected.length + ' 個待解鎖 ' + needed;
+            }
+        }
+    }
+
+    function resetCharge() {
+        gameState.chargingGesture = -1;
+        gameState.chargeStart = 0;
+        updateProgressRing(0);
+    }
+
+    function updateProgressRing(progress) {
+        const circumference = 2 * Math.PI * 70;
+        const offset = circumference * (1 - progress);
+        progressCircle.style.strokeDasharray = circumference;
+        progressCircle.style.strokeDashoffset = offset;
+        progressCircle.style.stroke = progress > 0.8 ? '#00ff88' : '#FFD700';
+    }
+
+    function collectGesture(task) {
+        task.collected = true;
+        gameState.chargingGesture = -1;
+        gameState.chargeStart = 0;
+        updateProgressRing(0);
+        renderTaskPanel();
+
+        triggerFlash();
+
+        // Particle burst
+        if (typeof createBurst === 'function') {
+            burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 300));
+            burstParticles.push(createBurst(0.5, 0.5, '#FFD700', 150));
+        }
+
+        const allCollected = gameState.tasks.every(t => t.collected);
+        if (allCollected) {
+            setTimeout(showSuccess, 800);
+        } else {
+            hintText.textContent = '\u592A\u68D2\u4E86\uFF01\u7E7C\u7E8C\u6536\u96C6\uFF01';
+        }
+    }
+
+    function triggerFlash() {
+        screenFlash.style.opacity = '0.8';
+        setTimeout(() => { screenFlash.style.opacity = '0'; }, 150);
+        document.body.classList.add('shake');
+        setTimeout(() => { document.body.classList.remove('shake'); }, 500);
+    }
+
+    // ============================================================
+    // GAME LOOP (smooth progress updates)
+    // ============================================================
+    function gameLoop() {
+        requestAnimationFrame(gameLoop);
+        if (gameState.phase !== 'PLAYING') return;
+        if (revealCooldown) return;
+        if (gameState.chargingGesture === undefined || gameState.chargeStart === 0) return;
+
+        const elapsed = performance.now() - gameState.chargeStart;
+        const progress = Math.min(elapsed / CHARGE_DURATION, 1);
+        updateProgressRing(progress);
+        hintText.textContent = '辨識中… ' + Math.round(progress * 100) + '%';
+
+        if (progress >= 1) {
+            const task = gameState.tasks.find(
+                t => t.gesture === gameState.chargingGesture && !t.collected
+            );
+            if (task) {
+                // Correct gesture!
+                collectGesture(task);
+            } else {
+                // Wrong or already collected — reveal feedback
+                revealWrongGesture();
+            }
+        }
+    }
+
+    function revealWrongGesture() {
+        revealCooldown = true;
+        resetCharge();
+
+        const hint = WRONG_GESTURE_HINTS[wrongHintIndex % WRONG_GESTURE_HINTS.length];
+        wrongHintIndex++;
+        hintText.textContent = hint;
+        detectedGestureEl.classList.remove('matching');
+        detectedGestureEl.textContent = '✗';
+
+        // Shake feedback
+        document.body.classList.add('shake');
+        setTimeout(() => { document.body.classList.remove('shake'); }, 500);
+
+        // Hold the message for 1.5s before allowing next attempt
+        setTimeout(() => {
+            revealCooldown = false;
+            detectedGestureEl.textContent = '?';
+            const uncollected = gameState.tasks.filter(t => !t.collected);
+            if (uncollected.length > 0) {
+                const needed = uncollected.map(() => '❓').join(' ');
+                hintText.textContent = '還有 ' + uncollected.length + ' 個待解鎖 ' + needed;
+            }
+        }, 1500);
+    }
+
+    // ============================================================
+    // SUCCESS
+    // ============================================================
+    function showSuccess() {
+        gameState.phase = 'SUCCESS';
+        speedLines.style.opacity = '0.5';
+        gameHud.style.display = 'none';
+
+        successCards.textContent = '';
+        gameState.tasks.forEach(task => {
+            const card = document.createElement('div');
+            card.className = 'success-card';
+
+            const icon = document.createElement('span');
+            icon.className = 'gesture-icon';
+            icon.textContent = GESTURE_ICONS[task.gesture];
+
+            const label = document.createElement('div');
+            label.className = 'theme-label';
+            label.textContent = task.themeZh;
+
+            card.appendChild(icon);
+            card.appendChild(label);
+            successCards.appendChild(card);
+        });
+
+        successScreen.style.display = 'flex';
+        triggerFlash();
+
+        setTimeout(takeScreenshot, 1000);
+    }
+
+    // ============================================================
+    // SCREENSHOT
+    // ============================================================
+    function takeScreenshot() {
+        const canvas = document.createElement('canvas');
+        const video = document.querySelector('.camera-video');
+        const w = video.videoWidth || 1280;
+        const h = video.videoHeight || 720;
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+
+        // Mirrored video
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, -w, 0, w, h);
+        ctx.restore();
+
+        // Overlay
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Title
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold ' + (w * 0.06) + 'px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+        ctx.shadowBlur = 30;
+        ctx.fillText('MISSION COMPLETE!', w / 2, h * 0.3);
+        ctx.shadowBlur = 0;
+
+        // Gesture cards
+        const cardW = w * 0.2;
+        const cardH = h * 0.25;
+        const gap = w * 0.04;
+        const totalW = 3 * cardW + 2 * gap;
+        const startX = (w - totalW) / 2;
+        const cardY = h * 0.4;
+
+        gameState.tasks.forEach((task, i) => {
+            const x = startX + i * (cardW + gap);
+
+            // Card bg
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.15)';
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.6)';
+            ctx.lineWidth = 3;
+            roundRect(ctx, x, cardY, cardW, cardH, 16);
+
+            // Icon
+            ctx.fillStyle = '#fff';
+            ctx.font = (w * 0.05) + 'px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(GESTURE_ICONS[task.gesture], x + cardW / 2, cardY + cardH * 0.45);
+
+            // Label
+            ctx.fillStyle = '#00ff88';
+            ctx.font = 'bold ' + (w * 0.025) + 'px "Noto Sans TC", sans-serif';
+            ctx.fillText(task.themeZh, x + cardW / 2, cardY + cardH * 0.75);
+        });
+
+        // Share or download
+        canvas.toBlob(function(blob) {
+            if (!blob) return;
+            const file = new File([blob], 'gesture-mission-' + Date.now() + '.png', { type: 'image/png' });
+
+            // Try native share (iOS/Android)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file] }).catch(function() {});
+            } else {
+                // Fallback: download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+            }
+        }, 'image/png');
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // ============================================================
+    // MEDIAPIPE
+    // ============================================================
+    let cameraStarted = false;
+
+    function isMobile() {
+        return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+            (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+    }
+
+    function initCamera() {
+        if (cameraStarted) return;
+        cameraStarted = true;
+
+        const videoElement = document.querySelector('.camera-video');
+        const mobile = isMobile();
+
+        const hands = new Hands({
+            locateFile: function(file) {
+                return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/' + file;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: mobile ? 0 : 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.6,
+        });
+
+        hands.onResults(onHandResults);
+
+        const camWidth = mobile ? 640 : 1280;
+        const camHeight = mobile ? 480 : 720;
+
+        const cam = new Camera(videoElement, {
+            onFrame: async function() { await hands.send({ image: videoElement }); },
+            width: camWidth,
+            height: camHeight,
+            facingMode: 'user',
+        });
+        cam.start();
+    }
+
+    function onHandResults(results) {
+        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+            if (gameState.phase === 'PLAYING') {
+                detectedGestureEl.textContent = '?';
+                detectedGestureEl.classList.remove('matching');
+                resetCharge();
+                gameState.tasks.forEach((t, i) => {
+                    document.getElementById('task-card-' + i).classList.remove('active');
+                });
+                hintText.textContent = '\u5C07\u624B\u638C\u5C0D\u6E96\u93E1\u982D';
+            }
+            return;
+        }
+
+        const landmarks = results.multiHandLandmarks[0];
+        const rawGesture = recognizeGesture(landmarks);
+        const gesture = stabilize(rawGesture);
+
+        updateCharge(gesture, true);
+    }
+
+    // ============================================================
+    // FINGERPOSE GESTURE DEFINITIONS
+    // ============================================================
+    const fistGesture = new fp.GestureDescription('fist');
+    fistGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+    fistGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
+    fistGesture.addCurl(fp.Finger.Index, fp.FingerCurl.FullCurl, 1.0);
+    fistGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
+    fistGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
+    fistGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+
+    const twoGesture = new fp.GestureDescription('two');
+    twoGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.HalfCurl, 0.9);
+    twoGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+    twoGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.HalfCurl, 0.9);
+
+    const oneGesture = new fp.GestureDescription('one');
+    oneGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+    oneGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
+    oneGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+    oneGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
+    oneGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
+    oneGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+
+    const threeGesture = new fp.GestureDescription('three');
+    threeGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+    threeGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.HalfCurl, 0.9);
+
+    const fourGesture = new fp.GestureDescription('four');
+    fourGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+    fourGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
+    fourGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+    fourGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
+    fourGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
+    fourGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.NoCurl, 1.0);
+
+    const openPalmGesture = new fp.GestureDescription('open_palm');
+    openPalmGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 1.0);
+    openPalmGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+    openPalmGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
+    openPalmGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
+    openPalmGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.NoCurl, 1.0);
+
+    const thumbsUpGesture = new fp.GestureDescription('thumbs_up');
+    thumbsUpGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 1.0);
+    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.VerticalUp, 1.0);
+    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.DiagonalUpLeft, 0.9);
+    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.DiagonalUpRight, 0.9);
+    thumbsUpGesture.addCurl(fp.Finger.Index, fp.FingerCurl.FullCurl, 1.0);
+    thumbsUpGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
+    thumbsUpGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
+    thumbsUpGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+
+    const gestureEstimator = new fp.GestureEstimator([
+        fistGesture, oneGesture, twoGesture, threeGesture,
+        fourGesture, openPalmGesture, thumbsUpGesture
+    ]);
+
+    const GESTURE_NAME_TO_INDEX = {
+        'fist': 0, 'one': 1, 'two': 2, 'three': 3,
+        'four': 4, 'open_palm': 5, 'thumbs_up': -1
+    };
+    const GESTURE_MIN_SCORE = 8.0;
+
+    // ============================================================
+    // STABILIZER (debounce)
+    // ============================================================
+    const STABLE_FRAMES_REQUIRED = 5;
+    let stableRaw = -1;
+    let stableCount = 0;
+    let stableConfirmed = -1;
+
+    function stabilize(raw) {
+        if (raw === stableRaw) {
+            stableCount++;
+        } else {
+            stableRaw = raw;
+            stableCount = 1;
+        }
+        if (stableCount >= STABLE_FRAMES_REQUIRED) {
+            stableConfirmed = raw;
+        }
+        return stableConfirmed;
+    }
+
+    // ============================================================
+    // GESTURE RECOGNITION
+    // ============================================================
+    function recognizeGesture(landmarks) {
+        // Convert MediaPipe {x,y,z} to fingerpose [[x,y,z],...] format
+        const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
+
+        const result = gestureEstimator.estimate(converted, GESTURE_MIN_SCORE);
+
+        if (result.gestures.length === 0) return -1;
+
+        // Pick highest score
+        let best = result.gestures[0];
+        for (let i = 1; i < result.gestures.length; i++) {
+            if (result.gestures[i].score > best.score) {
+                best = result.gestures[i];
+            }
+        }
+
+        return GESTURE_NAME_TO_INDEX[best.name] !== undefined
+            ? GESTURE_NAME_TO_INDEX[best.name]
+            : -1;
+    }
+
+    // ============================================================
+    // THREE.JS EFFECTS
+    // ============================================================
+    let threeScene, threeCamera, threeRenderer, threeClock;
+    let burstParticles = [];
+    let glowSprite = null;
+
+    function initThreeJS() {
+        const container = document.getElementById('three-container');
+        threeScene = new THREE.Scene();
+        threeCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 5000);
+        threeCamera.position.z = 1000;
+        threeClock = new THREE.Clock();
+
+        threeRenderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+        threeRenderer.setSize(window.innerWidth, window.innerHeight);
+        threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(threeRenderer.domElement);
+
+        glowSprite = generateGlowSprite();
+
+        window.addEventListener('resize', function() {
+            threeCamera.aspect = window.innerWidth / window.innerHeight;
+            threeCamera.updateProjectionMatrix();
+            threeRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animateThree();
+    }
+
+    function animateThree() {
+        requestAnimationFrame(animateThree);
+        const dt = threeClock.getDelta();
+
+        burstParticles.forEach(function(burst) { updateBurst(burst, dt); });
+
+        burstParticles = burstParticles.filter(function(b) {
+            if (b.life <= 0) {
+                threeScene.remove(b.points);
+                b.geometry.dispose();
+                b.material.dispose();
+                return false;
+            }
+            return true;
+        });
+
+        // Celebration bursts during success
+        if (gameState.phase === 'SUCCESS' && Math.random() < 0.03) {
+            triggerCelebrationBurst();
+        }
+
+        threeRenderer.render(threeScene, threeCamera);
+    }
+
+    function createBurst(nx, ny, color, count) {
+        count = count || 200;
+        var tx = (nx - 0.5) * window.innerWidth;
+        var ty = -(ny - 0.5) * window.innerHeight;
+
+        var geometry = new THREE.BufferGeometry();
+        var positions = new Float32Array(count * 3);
+        var velocities = new Float32Array(count * 3);
+        var colors = new Float32Array(count * 3);
+        var col = new THREE.Color(color);
+
+        for (var i = 0; i < count; i++) {
+            positions[i * 3] = tx;
+            positions[i * 3 + 1] = ty;
+            positions[i * 3 + 2] = 0;
+
+            var angle = Math.random() * Math.PI * 2;
+            var speed = 5 + Math.random() * 15;
+            velocities[i * 3] = Math.cos(angle) * speed;
+            velocities[i * 3 + 1] = Math.sin(angle) * speed;
+            velocities[i * 3 + 2] = (Math.random() - 0.5) * speed;
+
+            colors[i * 3] = col.r;
+            colors[i * 3 + 1] = col.g;
+            colors[i * 3 + 2] = col.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        var material = new THREE.PointsMaterial({
+            size: 20,
+            map: glowSprite,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            opacity: 0.9,
+        });
+
+        var points = new THREE.Points(geometry, material);
+        threeScene.add(points);
+
+        return {
+            points: points, geometry: geometry, material: material,
+            positions: positions, velocities: velocities,
+            life: 2.0, maxLife: 2.0, count: count,
+        };
+    }
+
+    function updateBurst(burst, dt) {
+        burst.life -= dt;
+        var pos = burst.positions;
+        var vel = burst.velocities;
+
+        for (var i = 0; i < burst.count; i++) {
+            pos[i * 3] += vel[i * 3] * dt * 60;
+            pos[i * 3 + 1] += vel[i * 3 + 1] * dt * 60;
+            pos[i * 3 + 2] += vel[i * 3 + 2] * dt * 60;
+            vel[i * 3 + 1] -= 0.2;
+            vel[i * 3] *= 0.98;
+            vel[i * 3 + 1] *= 0.98;
+            vel[i * 3 + 2] *= 0.98;
+        }
+
+        burst.geometry.attributes.position.needsUpdate = true;
+        burst.points.material.opacity = Math.max(0, burst.life / burst.maxLife) * 0.9;
+    }
+
+    function triggerCelebrationBurst() {
+        var x = 0.2 + Math.random() * 0.6;
+        var y = 0.2 + Math.random() * 0.6;
+        var celebColors = ['#FFD700', '#00ff88', '#667eea', '#ff6b6b', '#ffffff'];
+        var color = celebColors[Math.floor(Math.random() * celebColors.length)];
+        burstParticles.push(createBurst(x, y, color, 80));
+    }
+
+    function generateGlowSprite() {
+        var canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        var ctx = canvas.getContext('2d');
+        var g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+        g.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    // ============================================================
+    // EVENT LISTENERS
+    // ============================================================
+    startBtn.addEventListener('click', function() {
+        initGame();
+        initCamera();
+        initThreeJS();
+        gameLoop();
+    });
+
+    replayBtn.addEventListener('click', function() {
+        initGame();
+    });
+
+    </script>
+</body>
+</html>
