@@ -986,6 +986,44 @@
     // ============================================================
     // GESTURE RECOGNITION
     // ============================================================
+    // Check thumb extension using landmark distances
+    function isThumbExtended(landmarks) {
+        // Thumb tip (4) distance from palm base (0)
+        var thumbTip = landmarks[4];
+        var wrist = landmarks[0];
+        var indexMcp = landmarks[5];
+        var pinkyMcp = landmarks[17];
+
+        // Palm width as reference
+        var palmWidth = Math.sqrt(
+            Math.pow(indexMcp.x - pinkyMcp.x, 2) +
+            Math.pow(indexMcp.y - pinkyMcp.y, 2)
+        );
+
+        // Thumb tip to index MCP distance
+        var thumbToIndex = Math.sqrt(
+            Math.pow(thumbTip.x - indexMcp.x, 2) +
+            Math.pow(thumbTip.y - indexMcp.y, 2)
+        );
+
+        // Thumb extended when tip is far from index MCP relative to palm width
+        return thumbToIndex > palmWidth * 0.8;
+    }
+
+    // Count extended fingers using landmarks (excluding thumb)
+    function countExtendedFingers(landmarks) {
+        var count = 0;
+        // Index: tip(8) vs pip(6)
+        if (landmarks[8].y < landmarks[6].y) count++;
+        // Middle: tip(12) vs pip(10)
+        if (landmarks[12].y < landmarks[10].y) count++;
+        // Ring: tip(16) vs pip(14)
+        if (landmarks[16].y < landmarks[14].y) count++;
+        // Pinky: tip(20) vs pip(18)
+        if (landmarks[20].y < landmarks[18].y) count++;
+        return count;
+    }
+
     function recognizeGesture(landmarks) {
         // Convert MediaPipe {x,y,z} to fingerpose [[x,y,z],...] format
         const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
@@ -1002,8 +1040,26 @@
             }
         }
 
-        return GESTURE_NAME_TO_INDEX[best.name] !== undefined
-            ? GESTURE_NAME_TO_INDEX[best.name]
+        var gestureName = best.name;
+
+        // Post-processing: use landmarks to verify thumb state
+        var thumbOut = isThumbExtended(landmarks);
+        var extendedFingers = countExtendedFingers(landmarks);
+
+        // If fingerpose says open_palm but thumb is NOT extended → it's actually 3 or 4
+        if (gestureName === 'open_palm' && !thumbOut) {
+            if (extendedFingers === 4) return 4;
+            if (extendedFingers === 3) return 3;
+            return -1;
+        }
+
+        // If fingerpose says three/four but thumb IS extended → it's actually 5
+        if ((gestureName === 'three' || gestureName === 'four') && thumbOut) {
+            if (extendedFingers === 4) return 5;
+        }
+
+        return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
+            ? GESTURE_NAME_TO_INDEX[gestureName]
             : -1;
     }
 
