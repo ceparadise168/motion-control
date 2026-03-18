@@ -527,7 +527,7 @@
             background: rgba(15, 15, 35, 0.8);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 255, 136, 0.4);
+            border: 2px solid transparent;
             border-radius: 12px;
             padding: 14px 18px;
             text-align: center;
@@ -544,12 +544,67 @@
             transform: translateY(0);
         }
 
-        .success-card::before {
+        /* Neon LED border chase effect */
+        .success-card::before,
+        .success-card::after {
             content: '';
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 2px;
-            background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+            inset: -2px;
+            border-radius: 14px;
+            padding: 2px;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+
+        .success-card::before {
+            background: conic-gradient(
+                from var(--led-angle, 0deg) at 50% 50%,
+                var(--neon-green) 0deg,
+                var(--neon-cyan) 90deg,
+                rgba(0, 255, 136, 0.15) 150deg,
+                transparent 180deg,
+                rgba(0, 255, 136, 0.15) 210deg,
+                var(--neon-cyan) 270deg,
+                var(--neon-green) 360deg
+            );
+            animation: ledChase var(--led-speed, 2s) linear infinite;
+            animation-delay: var(--led-delay, 0s);
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            width: auto; height: auto;
+        }
+
+        .success-card:nth-child(1) { --led-delay: 0s; --led-speed: 2s; }
+        .success-card:nth-child(2) { --led-delay: -0.7s; --led-speed: 2.3s; }
+        .success-card:nth-child(3) { --led-delay: -1.4s; --led-speed: 1.8s; }
+
+        .success-card::after {
+            background: rgba(0, 255, 136, 0.15);
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            width: auto; height: auto;
+        }
+
+        @property --led-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        @keyframes ledChase {
+            to { --led-angle: 360deg; }
+        }
+
+        /* Glow pulse behind the card — staggered per card */
+        #success-screen.fade-in .success-card {
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.2), 0 0 30px rgba(0, 255, 136, 0.1);
+        }
+        #success-screen.fade-in .success-card:nth-child(1) { animation: neonPulse 2.2s ease-in-out infinite 0s; }
+        #success-screen.fade-in .success-card:nth-child(2) { animation: neonPulse 1.8s ease-in-out infinite 0.6s; }
+        #success-screen.fade-in .success-card:nth-child(3) { animation: neonPulse 2.5s ease-in-out infinite 1.2s; }
+
+        @keyframes neonPulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.2), 0 0 30px rgba(0, 255, 136, 0.1); }
+            50% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.35), 0 0 40px rgba(0, 255, 136, 0.15); }
         }
 
         .success-card .gesture-icon {
@@ -1465,8 +1520,9 @@
             gameState.tasks.forEach(function(task, i) {
                 var card = document.createElement('div');
                 card.className = 'success-card';
-                // Stagger each card's transition delay
+                // Stagger each card's transition and LED animation delay
                 card.style.transitionDelay = (0.4 + i * 0.15) + 's';
+                card.style.animationDelay = (i * 0.3) + 's';
 
                 var icon = document.createElement('span');
                 icon.className = 'gesture-icon';
