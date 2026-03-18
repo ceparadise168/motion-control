@@ -4,16 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Gesture Collection Game</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Exo:wght@300;400;500;600;700;800;900&family=Roboto+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --neon-purple: #7C3AED;
+            --neon-cyan: #00FFFF;
+            --neon-pink: #FF006E;
+            --neon-green: #00ff88;
+            --neon-gold: #FFD700;
+            --bg-deep: #0F0F23;
+            --bg-dark: #0A0A1A;
+            --text-primary: #E2E8F0;
+            --text-muted: #94A3B8;
+            --card-bg: rgba(124, 58, 237, 0.08);
+            --card-border: rgba(124, 58, 237, 0.3);
+            --glow-purple: 0 0 20px rgba(124, 58, 237, 0.4);
+            --glow-cyan: 0 0 20px rgba(0, 255, 255, 0.4);
+            --glow-pink: 0 0 20px rgba(255, 0, 110, 0.4);
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             overflow: hidden;
-            background: #000;
-            font-family: 'Noto Sans TC', sans-serif;
+            background: var(--bg-deep);
+            font-family: 'Exo', 'Roboto Mono', sans-serif;
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
+            color: var(--text-primary);
+        }
+
+        /* CRT Scanline Overlay */
+        .crt-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.06) 2px,
+                rgba(0, 0, 0, 0.06) 4px
+            );
+            z-index: 999;
+            pointer-events: none;
         }
 
         /* Camera layer */
@@ -27,7 +62,12 @@
         .camera-overlay {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3);
+            background: linear-gradient(
+                180deg,
+                rgba(15, 15, 35, 0.5) 0%,
+                rgba(15, 15, 35, 0.3) 50%,
+                rgba(15, 15, 35, 0.5) 100%
+            );
             z-index: 1; pointer-events: none;
         }
 
@@ -45,134 +85,328 @@
             align-items: center;
             padding: 20px;
             padding-top: max(20px, env(safe-area-inset-top));
+            opacity: 1;
+            transition: opacity 0.4s ease;
         }
 
-        /* Start Screen */
+        .hud.fade-out {
+            opacity: 0;
+        }
+
+        /* =============== START SCREEN =============== */
         #start-screen {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            background: radial-gradient(ellipse at 50% 30%, rgba(124, 58, 237, 0.15) 0%, var(--bg-deep) 60%),
+                        var(--bg-deep);
             z-index: 100;
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-            gap: 30px;
+            gap: 32px;
         }
+
+        /* Animated grid background */
+        #start-screen::before {
+            content: '';
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background:
+                linear-gradient(rgba(124, 58, 237, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(124, 58, 237, 0.05) 1px, transparent 1px);
+            background-size: 60px 60px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(60px); }
+        }
+
         .start-title {
-            font-size: clamp(2rem, 6vw, 4rem);
-            font-weight: 900; color: #fff;
-            text-align: center; line-height: 1.3;
-        }
-        .start-subtitle {
-            font-size: clamp(0.9rem, 2.5vw, 1.2rem);
-            color: rgba(255,255,255,0.6);
+            font-size: clamp(2.2rem, 7vw, 4.5rem);
+            font-weight: 900;
             text-align: center;
-            max-width: 400px; padding: 0 20px;
+            line-height: 1.2;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(124, 58, 237, 0.5));
+            position: relative;
+            z-index: 1;
         }
+
+        .start-subtitle {
+            font-family: 'Roboto Mono', monospace;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            color: var(--text-muted);
+            text-align: center;
+            max-width: 400px;
+            padding: 0 20px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Mystery Slots */
+        .mystery-slots {
+            display: flex; gap: 16px;
+            justify-content: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .mystery-slot {
+            width: clamp(70px, 20vw, 100px);
+            height: clamp(90px, 26vw, 130px);
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .mystery-slot:hover {
+            border-color: rgba(124, 58, 237, 0.6);
+            box-shadow: var(--glow-purple);
+        }
+
+        .mystery-slot::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: conic-gradient(
+                from 0deg,
+                transparent 0deg,
+                rgba(124, 58, 237, 0.1) 60deg,
+                transparent 120deg
+            );
+            animation: slotGlow 4s linear infinite;
+        }
+
+        @keyframes slotGlow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .mystery-slot .slot-icon {
+            position: relative;
+            z-index: 1;
+            width: 40px;
+            height: 40px;
+            opacity: 0.3;
+            animation: pulseSlot 2.5s ease-in-out infinite;
+        }
+
+        .mystery-slot:nth-child(2) .slot-icon { animation-delay: 0.5s; }
+        .mystery-slot:nth-child(3) .slot-icon { animation-delay: 1s; }
+
+        @keyframes pulseSlot {
+            0%, 100% { opacity: 0.2; transform: scale(0.9); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+
+        .start-hint {
+            font-family: 'Roboto Mono', monospace;
+            font-size: clamp(0.8rem, 2vw, 1rem);
+            color: var(--text-muted);
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Slot reel spin animation */
+        .task-card .gesture-icon {
+            position: relative;
+            overflow: hidden;
+        }
+        .task-card.slot-spinning .gesture-icon {
+            animation: none;
+        }
+        .slot-reel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.1s linear;
+        }
+        @keyframes slot-spin {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-100%); }
+        }
+
+        /* Buttons */
         #start-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff; border: none;
-            padding: 16px 48px;
-            font-size: clamp(1.2rem, 3vw, 1.5rem);
-            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-pink) 100%);
+            color: #fff;
+            border: none;
+            padding: 16px 56px;
+            font-size: clamp(1.1rem, 3vw, 1.4rem);
+            font-family: 'Exo', sans-serif;
             font-weight: 700;
-            border-radius: 50px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            border-radius: 8px;
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 30px rgba(124, 58, 237, 0.4),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 1;
         }
-        #start-btn:hover { transform: scale(1.05); box-shadow: 0 6px 30px rgba(102, 126, 234, 0.6); }
-        #start-btn:active { transform: scale(0.98); }
 
-        /* Task Panel */
+        #start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px rgba(124, 58, 237, 0.6),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        #start-btn:active { transform: translateY(1px); }
+
+        /* =============== TASK PANEL =============== */
         .task-panel {
             display: flex; gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
             margin-top: 10px;
         }
+
         .task-card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 2px solid rgba(255,255,255,0.15);
-            border-radius: 16px;
-            padding: 10px 14px;
+            background: rgba(15, 15, 35, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 12px 16px;
             text-align: center;
             min-width: min(100px, 28vw);
-            transition: all 0.4s ease;
+            transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
         }
+
+        .task-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-purple), transparent);
+            opacity: 0.5;
+        }
+
         .task-card.active {
-            border-color: rgba(255, 215, 0, 0.8);
-            background: rgba(255, 215, 0, 0.15);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            border-color: var(--neon-cyan);
+            background: rgba(0, 255, 255, 0.08);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.2),
+                        inset 0 0 25px rgba(0, 255, 255, 0.05);
         }
+
+        .task-card.active::before {
+            background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+            opacity: 1;
+        }
+
         .task-card.collected {
-            border-color: rgba(0, 255, 136, 0.8);
-            background: rgba(0, 255, 136, 0.15);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+            border-color: var(--neon-green);
+            background: rgba(0, 255, 136, 0.08);
+            box-shadow: 0 0 25px rgba(0, 255, 136, 0.2),
+                        inset 0 0 25px rgba(0, 255, 136, 0.05);
         }
+
+        .task-card.collected::before {
+            background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+            opacity: 1;
+        }
+
         .task-card .gesture-icon {
             font-size: clamp(2rem, 5vw, 3rem);
-            display: block; margin-bottom: 4px;
+            display: block;
+            margin-bottom: 6px;
         }
+
         .task-card .theme-label {
-            font-size: clamp(0.7rem, 2vw, 0.9rem);
-            color: rgba(255,255,255,0.8);
-            font-weight: 700;
+            font-family: 'Roboto Mono', monospace;
+            font-size: clamp(0.65rem, 1.8vw, 0.8rem);
+            color: var(--text-muted);
+            font-weight: 500;
+            letter-spacing: 1px;
         }
+
+        .task-card.active .theme-label { color: var(--neon-cyan); }
+        .task-card.collected .theme-label { color: var(--neon-green); }
+
         .task-card .check-mark {
             display: none;
             position: absolute; top: 6px; right: 8px;
-            color: #00ff88; font-size: 1.2rem; font-weight: bold;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: var(--neon-green);
+            text-shadow: 0 0 4px rgba(0, 255, 136, 0.6);
         }
+
         .task-card.collected .check-mark { display: block; }
 
-        /* Center Display */
+        /* =============== CENTER DISPLAY =============== */
         .center-display {
             flex: 1;
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
         }
+
         .progress-ring-container {
             position: relative;
-            width: clamp(120px, 30vw, 180px);
-            height: clamp(120px, 30vw, 180px);
+            width: clamp(130px, 32vw, 200px);
+            height: clamp(130px, 32vw, 200px);
             display: flex; justify-content: center; align-items: center;
         }
+
         .progress-ring {
             transform: rotate(-90deg);
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
+            filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.3));
         }
-        .progress-ring circle { fill: none; stroke-width: 6; }
-        .progress-ring .bg { stroke: rgba(255,255,255,0.15); }
+
+        .progress-ring circle { fill: none; stroke-width: 4; }
+        .progress-ring .bg { stroke: rgba(124, 58, 237, 0.15); }
         .progress-ring .fg {
-            stroke: #FFD700;
+            stroke: var(--neon-cyan);
             stroke-linecap: round;
             stroke-dasharray: 440;
             stroke-dashoffset: 440;
-            transition: stroke-dashoffset 0.1s linear;
+            transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
         }
+
         .detected-gesture {
             font-size: clamp(3rem, 10vw, 6rem);
-            color: #fff; opacity: 0.3;
-            transition: opacity 0.3s;
-            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+            opacity: 0.2;
+            transition: opacity 0.3s, filter 0.3s;
         }
-        .detected-gesture.matching { opacity: 1; }
 
-        /* Bottom hint */
+        .detected-gesture.matching {
+            opacity: 1;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
+        }
+
+        /* =============== HINT TEXT =============== */
         .hint-text {
-            font-size: clamp(0.8rem, 2.5vw, 1.1rem);
-            color: rgba(255,255,255,0.7);
+            font-family: 'Roboto Mono', monospace;
+            font-size: clamp(0.75rem, 2.2vw, 1rem);
+            color: var(--text-muted);
             text-align: center;
             padding-bottom: env(safe-area-inset-bottom, 20px);
             margin-bottom: 20px;
+            letter-spacing: 1px;
         }
 
-        /* Success Screen */
+        /* =============== SUCCESS SCREEN =============== */
         #success-screen {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -180,73 +414,199 @@
             display: none;
             flex-direction: column;
             justify-content: center; align-items: center;
-            gap: 20px;
+            gap: 24px;
+            opacity: 0;
         }
+
+        #success-screen.fade-in {
+            opacity: 1;
+        }
+
         .success-overlay {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(15, 15, 35, 0.6);
             z-index: -1;
+            opacity: 0;
+            transition: opacity 0.5s ease;
         }
+
+        #success-screen.fade-in .success-overlay {
+            opacity: 1;
+        }
+
         .success-title {
             font-size: clamp(2rem, 7vw, 4rem);
-            font-weight: 900; color: #fff;
-            text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
-            animation: successPulse 2s ease-in-out infinite;
+            font-weight: 900;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.5));
+            animation: successGlow 2s ease-in-out infinite;
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            transition: opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s;
         }
-        @keyframes successPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+
+        #success-screen.fade-in .success-title {
+            opacity: 1;
+            transform: translateY(0) scale(1);
         }
+
+        @keyframes successGlow {
+            0%, 100% { filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.5)); }
+            50% { filter: drop-shadow(0 0 50px rgba(0, 255, 255, 0.7)); }
+        }
+
         .success-cards {
             display: flex; gap: 16px;
             justify-content: center;
             flex-wrap: wrap;
         }
+
         .success-card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 2px solid rgba(0, 255, 136, 0.6);
-            border-radius: 16px;
-            padding: 12px 16px;
+            background: rgba(15, 15, 35, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 12px;
+            padding: 14px 18px;
             text-align: center;
             min-width: min(100px, 28vw);
+            position: relative;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(24px);
+            transition: opacity 0.4s ease, transform 0.4s ease;
         }
-        .success-card .gesture-icon { font-size: clamp(2rem, 5vw, 3rem); display: block; margin-bottom: 6px; }
-        .success-card .theme-label { font-size: clamp(0.8rem, 2.5vw, 1rem); color: #00ff88; font-weight: 700; }
+
+        #success-screen.fade-in .success-card {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .success-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+        }
+
+        .success-card .gesture-icon {
+            font-size: clamp(2rem, 5vw, 3rem);
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .success-card .theme-label {
+            font-family: 'Roboto Mono', monospace;
+            font-size: clamp(0.7rem, 2vw, 0.9rem);
+            color: var(--neon-green);
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
 
         .logo-placeholder {
             margin-top: 20px;
-            font-size: 0.9rem;
-            color: rgba(255,255,255,0.4);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
         }
 
+        /* =============== BUTTONS (shared) =============== */
         #replay-btn {
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
-            color: #fff; padding: 12px 36px;
-            font-size: 1.1rem;
-            font-family: 'Noto Sans TC', sans-serif;
-            font-weight: 700;
-            border-radius: 50px;
-            cursor: pointer; pointer-events: auto;
-            transition: transform 0.2s, background 0.2s;
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 12px 36px;
+            font-size: 1rem;
+            font-family: 'Exo', sans-serif;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 8px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.2s;
         }
-        #replay-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
 
-        /* Overlays */
+        #replay-btn:hover {
+            border-color: var(--neon-purple);
+            background: rgba(124, 58, 237, 0.1);
+            box-shadow: var(--glow-purple);
+        }
+
+        .share-btn {
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 12px 36px;
+            font-size: clamp(0.85rem, 2.2vw, 1rem);
+            font-family: 'Exo', sans-serif;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 8px;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .share-btn:hover {
+            border-color: var(--neon-cyan);
+            background: rgba(0, 255, 255, 0.08);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .share-btn .share-icon {
+            display: flex;
+            align-items: center;
+        }
+
+        .share-btn .share-icon svg {
+            width: 18px; height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* =============== OVERLAYS =============== */
         .speed-lines {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: repeating-conic-gradient(from 0deg, transparent 0deg, transparent 10deg, rgba(255,255,255,0.08) 10.5deg, transparent 11deg);
+            background: repeating-conic-gradient(
+                from 0deg,
+                transparent 0deg,
+                transparent 10deg,
+                rgba(124, 58, 237, 0.06) 10.5deg,
+                transparent 11deg
+            );
             z-index: 3; opacity: 0; pointer-events: none;
             transition: opacity 0.3s;
         }
+
         .screen-flash {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: #fff; z-index: 45;
+            background: var(--neon-cyan);
+            z-index: 45;
             opacity: 0; pointer-events: none;
             transition: opacity 0.1s;
         }
@@ -259,127 +619,165 @@
             75% { transform: translate(-2px, 4px); }
         }
 
-        /* Share Button */
-        .share-btn {
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
-            color: #fff;
-            padding: 12px 36px;
-            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
-            font-family: 'Noto Sans TC', sans-serif;
-            font-weight: 700;
-            border-radius: 50px;
-            cursor: pointer;
-            pointer-events: auto;
-            transition: transform 0.2s, background 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .share-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
-        .share-btn:active { transform: scale(0.98); }
-        .share-btn .share-icon {
-            font-size: 1.2em;
-        }
-        .btn-row {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        /* Share Modal */
+        /* =============== SHARE MODAL =============== */
         .share-modal-overlay {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
+            background: rgba(10, 10, 26, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 200;
             display: none;
             justify-content: center;
             align-items: center;
             padding: 20px;
         }
+
         .share-modal-overlay.visible { display: flex; }
+
         .share-modal {
-            background: #1a1a2e;
-            border: 2px solid rgba(255,255,255,0.15);
-            border-radius: 20px;
-            padding: 30px;
+            background: var(--bg-deep);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 32px;
             max-width: 360px;
             width: 100%;
             text-align: center;
             position: relative;
+            box-shadow: 0 0 60px rgba(124, 58, 237, 0.15);
         }
+
+        .share-modal::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-purple), var(--neon-cyan), transparent);
+        }
+
         .share-modal-title {
-            font-size: clamp(1.2rem, 3vw, 1.5rem);
-            font-weight: 900;
-            color: #fff;
-            margin-bottom: 20px;
+            font-size: clamp(1.1rem, 3vw, 1.3rem);
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 24px;
         }
+
         .qr-container {
             background: #fff;
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 16px;
             display: inline-block;
             margin-bottom: 20px;
         }
-        .qr-container canvas {
-            display: block;
-        }
+
+        .qr-container canvas { display: block; }
+
         .share-url {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 10px;
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: 8px;
             padding: 10px 14px;
-            color: rgba(255,255,255,0.8);
-            font-size: clamp(0.7rem, 2vw, 0.85rem);
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-muted);
+            font-size: clamp(0.65rem, 1.8vw, 0.8rem);
             word-break: break-all;
             margin-bottom: 16px;
             text-align: left;
         }
+
         .copy-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-pink) 100%);
             color: #fff;
             border: none;
             padding: 12px 32px;
-            font-size: 1rem;
-            font-family: 'Noto Sans TC', sans-serif;
-            font-weight: 700;
-            border-radius: 50px;
+            font-size: 0.95rem;
+            font-family: 'Exo', sans-serif;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 8px;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
             width: 100%;
         }
+
+        .copy-btn:hover {
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+        }
+
         .copy-btn:active { transform: scale(0.97); }
+
         .close-modal-btn {
             position: absolute;
             top: 12px; right: 16px;
             background: none; border: none;
-            color: rgba(255,255,255,0.5);
+            color: var(--text-muted);
             font-size: 1.5rem;
             cursor: pointer;
             line-height: 1;
+            transition: color 0.2s;
         }
-        .close-modal-btn:hover { color: #fff; }
+
+        .close-modal-btn:hover { color: var(--text-primary); }
+
         .copy-toast {
-            color: #00ff88;
-            font-size: 0.9rem;
-            font-weight: 700;
-            margin-top: 10px;
+            font-family: 'Roboto Mono', monospace;
+            color: var(--neon-green);
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-top: 12px;
             opacity: 0;
             transition: opacity 0.3s;
+            letter-spacing: 1px;
         }
+
         .copy-toast.visible { opacity: 1; }
+
+        /* =============== REDUCED MOTION =============== */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .crt-overlay { display: none; }
+            #start-screen::before { display: none; }
+        }
     </style>
 </head>
 <body>
 
+    <!-- CRT Scanline Effect -->
+    <div class="crt-overlay"></div>
+
     <!-- Start Screen -->
     <div id="start-screen">
-        <div class="start-title">GESTURE COLLECTION</div>
-        <div class="start-subtitle">Collect three hand gestures to complete your mission</div>
-        <button id="start-btn">START</button>
-        <button class="share-btn" onclick="openShareModal()"><span class="share-icon">&#x1F517;</span>分享給朋友</button>
+        <div class="start-title">Gesture<br>Collection</div>
+        <div class="start-subtitle">// detect . collect . complete</div>
+        <div class="mystery-slots">
+            <div class="mystery-slot">
+                <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--neon-purple)">
+                    <path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v6M10 10V6a2 2 0 0 0-4 0v8c0 4.418 3.582 8 8 8h1a7 7 0 0 0 7-7v-3a2 2 0 0 0-4 0"/>
+                </svg>
+            </div>
+            <div class="mystery-slot">
+                <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--neon-cyan)">
+                    <path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v6M10 10V6a2 2 0 0 0-4 0v8c0 4.418 3.582 8 8 8h1a7 7 0 0 0 7-7v-3a2 2 0 0 0-4 0"/>
+                </svg>
+            </div>
+            <div class="mystery-slot">
+                <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--neon-pink)">
+                    <path d="M18 11V6a2 2 0 0 0-4 0v1M14 10V4a2 2 0 0 0-4 0v6M10 10V6a2 2 0 0 0-4 0v8c0 4.418 3.582 8 8 8h1a7 7 0 0 0 7-7v-3a2 2 0 0 0-4 0"/>
+                </svg>
+            </div>
+        </div>
+        <div class="start-hint">HAND &#8594; GAME</div>
+        <button id="start-btn">Initialize</button>
+        <button class="share-btn" onclick="openShareModal()">
+            <span class="share-icon"><svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span>
+            Share
+        </button>
     </div>
 
     <!-- Camera -->
@@ -409,12 +807,15 @@
     <!-- Success Screen -->
     <div id="success-screen">
         <div class="success-overlay"></div>
-        <div class="success-title">MISSION COMPLETE!</div>
+        <div class="success-title">Mission Complete</div>
         <div class="success-cards" id="successCards"></div>
         <div class="logo-placeholder" id="logoArea"></div>
         <div class="btn-row">
-            <button id="replay-btn">Play Again</button>
-            <button class="share-btn" onclick="openShareModal()"><span class="share-icon">&#x1F517;</span>分享</button>
+            <button id="replay-btn">Replay</button>
+            <button class="share-btn" onclick="openShareModal()">
+                <span class="share-icon"><svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span>
+                Share
+            </button>
         </div>
     </div>
 
@@ -422,11 +823,11 @@
     <div class="share-modal-overlay" id="shareModal">
         <div class="share-modal">
             <button class="close-modal-btn" onclick="closeShareModal()">&times;</button>
-            <div class="share-modal-title">分享給朋友</div>
+            <div class="share-modal-title">Share Link</div>
             <div class="qr-container" id="qrContainer"></div>
             <div class="share-url" id="shareUrl"></div>
-            <button class="copy-btn" onclick="copyShareUrl()">複製連結</button>
-            <div class="copy-toast" id="copyToast">已複製！</div>
+            <button class="copy-btn" onclick="copyShareUrl()">Copy URL</button>
+            <div class="copy-toast" id="copyToast">Copied!</div>
         </div>
     </div>
 
@@ -446,7 +847,7 @@
     const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Three (3)', 'Four (4)', 'Five (5)'];
     const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '也不是這個', '再加油一下', '不是這個'];
     const FIXED_GESTURES = [1, 2, 0];
-    const CHARGE_DURATION = 2500;
+    const CHARGE_DURATION = 1200;
 
     // ============================================================
     // DOM REFS
@@ -499,11 +900,29 @@
         startScreen.style.display = 'none';
         gameHud.style.display = 'flex';
         successScreen.style.display = 'none';
+        successScreen.classList.remove('fade-in');
         speedLines.style.opacity = '0';
         detectedGestureEl.textContent = '?';
         detectedGestureEl.classList.remove('matching');
         updateProgressRing(0);
         hintText.textContent = '\u5C07\u624B\u638C\u5C0D\u6E96\u93E1\u982D';
+    }
+
+    function createCheckSvg() {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('width', '16');
+        svg.setAttribute('height', '16');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'var(--neon-green)');
+        svg.setAttribute('stroke-width', '3');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.style.filter = 'drop-shadow(0 0 4px rgba(0, 255, 136, 0.6))';
+        var polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('points', '20 6 9 17 4 12');
+        svg.appendChild(polyline);
+        return svg;
     }
 
     function renderTaskPanel() {
@@ -515,7 +934,7 @@
 
             const icon = document.createElement('span');
             icon.className = 'gesture-icon';
-            icon.textContent = task.collected ? GESTURE_ICONS[task.gesture] : '❓';
+            icon.textContent = task.collected ? GESTURE_ICONS[task.gesture] : '?';
 
             const label = document.createElement('div');
             label.className = 'theme-label';
@@ -523,7 +942,7 @@
 
             const check = document.createElement('span');
             check.className = 'check-mark';
-            check.textContent = '\u2713';
+            check.appendChild(createCheckSvg());
 
             card.appendChild(icon);
             card.appendChild(label);
@@ -535,7 +954,7 @@
     // ============================================================
     // CHARGE LOGIC
     // ============================================================
-    const WRONG_GESTURE_HINTS = ['再試試看！', '不是這個哦', '換一個手勢吧', '再加油一下', '也不是這個'];
+    const WRONG_GESTURE_HINTS = ['Try again', 'Not this one', 'Different gesture', 'Keep going', 'Not quite'];
     let wrongHintIndex = 0;
     let revealCooldown = false;
 
@@ -545,12 +964,10 @@
 
         gameState.currentGesture = detectedFingers;
 
-        // Hand visible with any stable gesture (including -1) → charge
         if (handVisible && detectedFingers !== undefined) {
             const isNewGesture = gameState.chargingGesture !== detectedFingers;
 
             if (detectedFingers >= 0) {
-                // Recognized gesture — start or continue charging
                 if (isNewGesture) {
                     gameState.chargingGesture = detectedFingers;
                     gameState.chargeStart = performance.now();
@@ -558,7 +975,6 @@
                 detectedGestureEl.classList.add('matching');
                 detectedGestureEl.textContent = GESTURE_ICONS[detectedFingers];
 
-                // Highlight matching card (if any)
                 const matchingTask = gameState.tasks.find(t => t.gesture === detectedFingers && !t.collected);
                 gameState.tasks.forEach((t, i) => {
                     const card = document.getElementById('task-card-' + i);
@@ -569,20 +985,18 @@
                     }
                 });
             } else {
-                // Hand visible but unrecognized gesture — also charge
                 if (isNewGesture) {
                     gameState.chargingGesture = detectedFingers;
                     gameState.chargeStart = performance.now();
                 }
                 detectedGestureEl.classList.add('matching');
-                detectedGestureEl.textContent = '🤔';
+                detectedGestureEl.textContent = '?';
 
                 gameState.tasks.forEach((t, i) => {
                     document.getElementById('task-card-' + i).classList.remove('active');
                 });
             }
         } else {
-            // No hand — reset
             detectedGestureEl.classList.remove('matching');
             detectedGestureEl.textContent = '?';
             resetCharge();
@@ -591,8 +1005,7 @@
             });
             const uncollected = gameState.tasks.filter(t => !t.collected);
             if (uncollected.length > 0) {
-                const needed = uncollected.map(() => '❓').join(' ');
-                hintText.textContent = '還有 ' + uncollected.length + ' 個待解鎖 ' + needed;
+                hintText.textContent = uncollected.length + ' remaining';
             }
         }
     }
@@ -608,7 +1021,32 @@
         const offset = circumference * (1 - progress);
         progressCircle.style.strokeDasharray = circumference;
         progressCircle.style.strokeDashoffset = offset;
-        progressCircle.style.stroke = progress > 0.8 ? '#00ff88' : '#FFD700';
+        progressCircle.style.stroke = progress > 0.8 ? 'var(--neon-green)' : 'var(--neon-cyan)';
+    }
+
+    function playSlotReel(taskIndex, finalGesture, callback) {
+        const card = document.getElementById('task-card-' + taskIndex);
+        const iconEl = card.querySelector('.gesture-icon');
+        const allIcons = GESTURE_ICONS.slice();
+        let spinCount = 0;
+        const totalSpins = 5;
+        const baseInterval = 50;
+
+        function spin() {
+            iconEl.textContent = allIcons[Math.floor(Math.random() * allIcons.length)];
+            spinCount++;
+            if (spinCount < totalSpins) {
+                setTimeout(spin, baseInterval + (spinCount * 10));
+            } else {
+                iconEl.textContent = GESTURE_ICONS[finalGesture];
+                iconEl.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    iconEl.style.transform = '';
+                    if (callback) callback();
+                }, 200);
+            }
+        }
+        spin();
     }
 
     function collectGesture(task) {
@@ -616,33 +1054,51 @@
         gameState.chargingGesture = -1;
         gameState.chargeStart = 0;
         updateProgressRing(0);
-        renderTaskPanel();
+
+        const taskIndex = gameState.tasks.indexOf(task);
+        playSlotReel(taskIndex, task.gesture, function() {
+            const card = document.getElementById('task-card-' + taskIndex);
+            card.classList.add('collected');
+            const label = card.querySelector('.theme-label');
+            if (label) label.textContent = task.themeZh;
+            const check = card.querySelector('.check-mark');
+            if (check) check.style.opacity = '1';
+        });
 
         triggerFlash();
 
-        // Particle burst
         if (typeof createBurst === 'function') {
             burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 300));
-            burstParticles.push(createBurst(0.5, 0.5, '#FFD700', 150));
+            burstParticles.push(createBurst(0.5, 0.5, '#00FFFF', 150));
         }
 
         const allCollected = gameState.tasks.every(t => t.collected);
         if (allCollected) {
-            setTimeout(showSuccess, 800);
+            gameState.phase = 'CELEBRATING';
+            hintText.textContent = 'All collected!';
+
+            // Trigger an immediate big burst wave
+            if (typeof createBurst === 'function') {
+                burstParticles.push(createBurst(0.3, 0.4, '#7C3AED', 200));
+                burstParticles.push(createBurst(0.7, 0.4, '#FF006E', 200));
+                burstParticles.push(createBurst(0.5, 0.3, '#FFD700', 150));
+            }
+
+            setTimeout(showSuccess, 2000);
         } else {
-            hintText.textContent = '\u592A\u68D2\u4E86\uFF01\u7E7C\u7E8C\u6536\u96C6\uFF01';
+            hintText.textContent = 'Collected! Keep going...';
         }
     }
 
     function triggerFlash() {
-        screenFlash.style.opacity = '0.8';
+        screenFlash.style.opacity = '0.6';
         setTimeout(() => { screenFlash.style.opacity = '0'; }, 150);
         document.body.classList.add('shake');
         setTimeout(() => { document.body.classList.remove('shake'); }, 500);
     }
 
     // ============================================================
-    // GAME LOOP (smooth progress updates)
+    // GAME LOOP
     // ============================================================
     function gameLoop() {
         requestAnimationFrame(gameLoop);
@@ -654,18 +1110,16 @@
         const progress = Math.min(elapsed / CHARGE_DURATION, 1);
         updateProgressRing(progress);
 
-        var chargingIcon = gameState.chargingGesture >= 0 ? GESTURE_ICONS[gameState.chargingGesture] : '🤔';
-        hintText.textContent = chargingIcon + ' 辨識中… ' + Math.round(progress * 100) + '%';
+        var chargingIcon = gameState.chargingGesture >= 0 ? GESTURE_ICONS[gameState.chargingGesture] : '?';
+        hintText.textContent = chargingIcon + ' Detecting... ' + Math.round(progress * 100) + '%';
 
         if (progress >= 1) {
             const task = gameState.tasks.find(
                 t => t.gesture === gameState.chargingGesture && !t.collected
             );
             if (task) {
-                // Correct gesture!
                 collectGesture(task);
             } else {
-                // Wrong or already collected — reveal feedback
                 revealWrongGesture();
             }
         }
@@ -679,20 +1133,17 @@
         wrongHintIndex++;
         hintText.textContent = hint;
         detectedGestureEl.classList.remove('matching');
-        detectedGestureEl.textContent = '✗';
+        detectedGestureEl.textContent = '\u2717';
 
-        // Shake feedback
         document.body.classList.add('shake');
         setTimeout(() => { document.body.classList.remove('shake'); }, 500);
 
-        // Hold the message for 1.5s before allowing next attempt
         setTimeout(() => {
             revealCooldown = false;
             detectedGestureEl.textContent = '?';
             const uncollected = gameState.tasks.filter(t => !t.collected);
             if (uncollected.length > 0) {
-                const needed = uncollected.map(() => '❓').join(' ');
-                hintText.textContent = '還有 ' + uncollected.length + ' 個待解鎖 ' + needed;
+                hintText.textContent = uncollected.length + ' remaining';
             }
         }, 1500);
     }
@@ -702,31 +1153,46 @@
     // ============================================================
     function showSuccess() {
         gameState.phase = 'SUCCESS';
-        speedLines.style.opacity = '0.5';
-        gameHud.style.display = 'none';
+        speedLines.style.opacity = '0.3';
 
-        successCards.textContent = '';
-        gameState.tasks.forEach(task => {
-            const card = document.createElement('div');
-            card.className = 'success-card';
+        // Step 1: Fade out HUD
+        gameHud.classList.add('fade-out');
 
-            const icon = document.createElement('span');
-            icon.className = 'gesture-icon';
-            icon.textContent = GESTURE_ICONS[task.gesture];
+        // Step 2: After HUD fades, build & show success screen
+        setTimeout(function() {
+            gameHud.style.display = 'none';
+            gameHud.classList.remove('fade-out');
 
-            const label = document.createElement('div');
-            label.className = 'theme-label';
-            label.textContent = task.themeZh;
+            successCards.textContent = '';
+            gameState.tasks.forEach(function(task, i) {
+                var card = document.createElement('div');
+                card.className = 'success-card';
+                // Stagger each card's transition delay
+                card.style.transitionDelay = (0.4 + i * 0.15) + 's';
 
-            card.appendChild(icon);
-            card.appendChild(label);
-            successCards.appendChild(card);
-        });
+                var icon = document.createElement('span');
+                icon.className = 'gesture-icon';
+                icon.textContent = GESTURE_ICONS[task.gesture];
 
-        successScreen.style.display = 'flex';
-        triggerFlash();
+                var label = document.createElement('div');
+                label.className = 'theme-label';
+                label.textContent = task.themeZh;
 
-        setTimeout(takeScreenshot, 1000);
+                card.appendChild(icon);
+                card.appendChild(label);
+                successCards.appendChild(card);
+            });
+
+            successScreen.style.display = 'flex';
+
+            // Trigger reflow, then add fade-in class
+            void successScreen.offsetHeight;
+            successScreen.classList.add('fade-in');
+
+            triggerFlash();
+
+            setTimeout(takeScreenshot, 1500);
+        }, 400);
     }
 
     // ============================================================
@@ -741,26 +1207,22 @@
         canvas.height = h;
         const ctx = canvas.getContext('2d');
 
-        // Mirrored video
         ctx.save();
         ctx.scale(-1, 1);
         ctx.drawImage(video, -w, 0, w, h);
         ctx.restore();
 
-        // Overlay
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillStyle = 'rgba(15, 15, 35, 0.6)';
         ctx.fillRect(0, 0, w, h);
 
-        // Title
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold ' + (w * 0.06) + 'px "Noto Sans TC", sans-serif';
+        ctx.fillStyle = '#00FFFF';
+        ctx.font = 'bold ' + (w * 0.05) + 'px "Exo", sans-serif';
         ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+        ctx.shadowColor = 'rgba(0, 255, 255, 0.6)';
         ctx.shadowBlur = 30;
-        ctx.fillText('MISSION COMPLETE!', w / 2, h * 0.3);
+        ctx.fillText('MISSION COMPLETE', w / 2, h * 0.3);
         ctx.shadowBlur = 0;
 
-        // Gesture cards
         const cardW = w * 0.2;
         const cardH = h * 0.25;
         const gap = w * 0.04;
@@ -771,34 +1233,28 @@
         gameState.tasks.forEach((task, i) => {
             const x = startX + i * (cardW + gap);
 
-            // Card bg
-            ctx.fillStyle = 'rgba(0, 255, 136, 0.15)';
-            ctx.strokeStyle = 'rgba(0, 255, 136, 0.6)';
-            ctx.lineWidth = 3;
-            roundRect(ctx, x, cardY, cardW, cardH, 16);
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.1)';
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
+            ctx.lineWidth = 2;
+            roundRect(ctx, x, cardY, cardW, cardH, 12);
 
-            // Icon
-            ctx.fillStyle = '#fff';
+            ctx.fillStyle = '#E2E8F0';
             ctx.font = (w * 0.05) + 'px serif';
             ctx.textAlign = 'center';
             ctx.fillText(GESTURE_ICONS[task.gesture], x + cardW / 2, cardY + cardH * 0.45);
 
-            // Label
             ctx.fillStyle = '#00ff88';
-            ctx.font = 'bold ' + (w * 0.025) + 'px "Noto Sans TC", sans-serif';
+            ctx.font = '500 ' + (w * 0.022) + 'px "Exo", sans-serif';
             ctx.fillText(task.themeZh, x + cardW / 2, cardY + cardH * 0.75);
         });
 
-        // Share or download
         canvas.toBlob(function(blob) {
             if (!blob) return;
             const file = new File([blob], 'gesture-mission-' + Date.now() + '.png', { type: 'image/png' });
 
-            // Try native share (iOS/Android)
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 navigator.share({ files: [file] }).catch(function() {});
             } else {
-                // Fallback: download link
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -989,7 +1445,6 @@
     // ============================================================
     // GESTURE RECOGNITION
     // ============================================================
-    // ---- Utility: distance between two landmarks ----
     function dist(a, b) {
         return Math.sqrt(
             Math.pow(a.x - b.x, 2) +
@@ -998,7 +1453,6 @@
         );
     }
 
-    // ---- Utility: angle at point B in triangle A-B-C (degrees) ----
     function angleDeg(a, b, c) {
         var ba = { x: a.x - b.x, y: a.y - b.y, z: (a.z||0) - (b.z||0) };
         var bc = { x: c.x - b.x, y: c.y - b.y, z: (c.z||0) - (b.z||0) };
@@ -1010,14 +1464,11 @@
         return Math.acos(cosAngle) * 180 / Math.PI;
     }
 
-    // ---- Check if a finger is extended using joint angles (orientation-robust) ----
-    // Finger is extended when MCP→PIP→TIP forms a roughly straight line (angle > threshold)
     function isFingerExtended(landmarks, mcp, pip, tip) {
         var angle = angleDeg(landmarks[mcp], landmarks[pip], landmarks[tip]);
         return angle > 140;
     }
 
-    // ---- Check thumb extension using distance ratio (orientation-robust) ----
     function isThumbExtended(landmarks, handedness) {
         var thumbTip = landmarks[4];
         var thumbIp = landmarks[3];
@@ -1025,10 +1476,8 @@
         var indexMcp = landmarks[5];
         var pinkyMcp = landmarks[17];
 
-        // Method 1: angle-based — thumb MCP→IP→TIP straightness
         var thumbAngle = angleDeg(landmarks[2], landmarks[3], landmarks[4]);
 
-        // Method 2: distance-based — thumb tip far from palm center
         var palmCx = (indexMcp.x + pinkyMcp.x) / 2;
         var palmCy = (indexMcp.y + pinkyMcp.y) / 2;
         var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0)) / 2;
@@ -1037,31 +1486,23 @@
         var palmWidth = dist(indexMcp, pinkyMcp);
         var thumbDist = dist(thumbTip, palmCenter);
 
-        // Both checks for robustness — strict threshold to avoid 3/4 being misread as 5
         return thumbAngle > 150 && thumbDist > palmWidth * 1.0;
     }
 
-    // ---- Count extended fingers (excluding thumb), orientation-robust ----
     function countExtendedFingers(landmarks) {
         var count = 0;
-        // Index: MCP(5) → PIP(6) → TIP(8)
         if (isFingerExtended(landmarks, 5, 6, 8)) count++;
-        // Middle: MCP(9) → PIP(10) → TIP(12)
         if (isFingerExtended(landmarks, 9, 10, 12)) count++;
-        // Ring: MCP(13) → PIP(14) → TIP(16)
         if (isFingerExtended(landmarks, 13, 14, 16)) count++;
-        // Pinky: MCP(17) → PIP(18) → TIP(20)
         if (isFingerExtended(landmarks, 17, 18, 20)) count++;
         return count;
     }
 
-    // ---- Check if hand is a fist using fingertip-to-palm distance (orientation-robust) ----
     function isFist(landmarks) {
         var indexMcp = landmarks[5];
         var pinkyMcp = landmarks[17];
         var wrist = landmarks[0];
 
-        // Palm center
         var palmCx = (indexMcp.x + pinkyMcp.x + wrist.x) / 3;
         var palmCy = (indexMcp.y + pinkyMcp.y + wrist.y) / 3;
         var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0) + (wrist.z||0)) / 3;
@@ -1070,34 +1511,27 @@
         var palmWidth = dist(indexMcp, pinkyMcp);
         if (palmWidth === 0) return false;
 
-        // All 4 fingertips must be close to palm center
         var tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
         var allClose = tips.every(function(tip) {
             return dist(tip, palmCenter) < palmWidth * 1.2;
         });
 
-        // Thumb tip also close to palm
         var thumbClose = dist(landmarks[4], palmCenter) < palmWidth * 1.3;
 
         return allClose && thumbClose;
     }
 
-    // ---- Main recognition: fingerpose + landmark post-processing ----
     function recognizeGesture(landmarks, handedness) {
-        // Convert MediaPipe {x,y,z} to fingerpose [[x,y,z],...] format
         const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
 
         const result = gestureEstimator.estimate(converted, GESTURE_MIN_SCORE);
 
-        // Landmark-based checks as ground truth
         var thumbOut = isThumbExtended(landmarks, handedness);
         var extendedFingers = countExtendedFingers(landmarks);
         var fist = isFist(landmarks);
 
-        // Fist check takes priority — most reliable across all angles
         if (fist) return 0;
 
-        // If fingerpose has a result, use it but verify with landmarks
         if (result.gestures.length > 0) {
             let best = result.gestures[0];
             for (let i = 1; i < result.gestures.length; i++) {
@@ -1108,7 +1542,6 @@
 
             var gestureName = best.name;
 
-            // Correct misclassifications using landmark truth
             if (gestureName === 'open_palm' && !thumbOut) {
                 return extendedFingers >= 1 ? extendedFingers : -1;
             }
@@ -1116,7 +1549,7 @@
                 return 5;
             }
             if (gestureName === 'fist' && thumbOut && extendedFingers === 0) {
-                return -1; // thumbs up, not fist
+                return -1;
             }
 
             return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
@@ -1124,7 +1557,6 @@
                 : -1;
         }
 
-        // Fallback: pure landmark-based classification
         if (extendedFingers === 4 && thumbOut) return 5;
         if (!thumbOut) {
             if (extendedFingers === 0) return 0;
@@ -1182,7 +1614,10 @@
             return true;
         });
 
-        // Celebration bursts during success
+        if (gameState.phase === 'CELEBRATING' && Math.random() < 0.15) {
+            triggerCelebrationBurst();
+        }
+
         if (gameState.phase === 'SUCCESS' && Math.random() < 0.03) {
             triggerCelebrationBurst();
         }
@@ -1262,7 +1697,7 @@
     function triggerCelebrationBurst() {
         var x = 0.2 + Math.random() * 0.6;
         var y = 0.2 + Math.random() * 0.6;
-        var celebColors = ['#FFD700', '#00ff88', '#667eea', '#ff6b6b', '#ffffff'];
+        var celebColors = ['#7C3AED', '#00FFFF', '#FF006E', '#00ff88', '#FFD700'];
         var color = celebColors[Math.floor(Math.random() * celebColors.length)];
         burstParticles.push(createBurst(x, y, color, 80));
     }
@@ -1319,7 +1754,7 @@
                 text: url,
                 width: 200,
                 height: 200,
-                colorDark: '#1a1a2e',
+                colorDark: '#0F0F23',
                 colorLight: '#ffffff',
                 correctLevel: QRCode.CorrectLevel.M
             });
@@ -1338,7 +1773,6 @@
             copyToast.classList.add('visible');
             setTimeout(function() { copyToast.classList.remove('visible'); }, 2000);
         }).catch(function() {
-            // Fallback for older browsers
             var ta = document.createElement('textarea');
             ta.value = url;
             ta.style.position = 'fixed';
@@ -1352,7 +1786,6 @@
         });
     }
 
-    // Close modal on overlay click
     shareModal.addEventListener('click', function(e) {
         if (e.target === shareModal) closeShareModal();
     });
