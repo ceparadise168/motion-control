@@ -420,7 +420,7 @@
             z-index: 20;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+            transition: opacity 0.25s ease-out;
         }
         .reveal-text.show {
             opacity: 1;
@@ -1309,8 +1309,10 @@
     }
 
     var revealTextEl = document.getElementById('revealText');
+    var revealInProgress = false;
 
     function showRevealText(text, callback) {
+        revealInProgress = true;
         revealTextEl.textContent = text;
         revealTextEl.className = 'reveal-text';
         void revealTextEl.offsetHeight;
@@ -1321,12 +1323,14 @@
             revealTextEl.classList.remove('show');
             setTimeout(function() {
                 revealTextEl.className = 'reveal-text';
+                revealInProgress = false;
                 if (callback) callback();
             }, 300);
         }, 1200);
     }
 
     function collectGesture(task) {
+        if (revealInProgress) return;
         task.collected = true;
         gameState.chargingGesture = -1;
         gameState.chargeStart = 0;
