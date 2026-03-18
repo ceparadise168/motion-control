@@ -850,233 +850,210 @@
 
     <script>
     // ============================================================
-    // FLOATING GEOMETRY (start screen background)
+    // TRIANGLE MESH (start screen background — TouchDesigner style)
     // ============================================================
     (function() {
         var canvas = document.getElementById('geoCanvas');
         var ctx = canvas.getContext('2d');
-        var segments = [];
-        var connections = [];
         var animId = null;
         var running = true;
 
-        var COLORS = [
-            'rgba(124, 58, 237, A)',  // purple
-            'rgba(0, 255, 255, A)',   // cyan
-            'rgba(255, 0, 110, A)',   // pink
-            'rgba(226, 232, 240, A)', // light
-        ];
+        // --- Perlin noise (2D, permutation table) ---
+        var _p = new Uint8Array(512);
+        (function(){for(var i=0;i<256;i++)_p[i]=i;for(var i=255;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=_p[i];_p[i]=_p[j];_p[j]=t;}for(var i=0;i<256;i++)_p[i+256]=_p[i];})();
+        var _g=[[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+        function noise2(x,y){
+            var X=Math.floor(x)&255,Y=Math.floor(y)&255;
+            x-=Math.floor(x);y-=Math.floor(y);
+            var u=x*x*(3-2*x),v=y*y*(3-2*y);
+            var a=_p[X]+Y,b=_p[X+1]+Y;
+            function dot(h,x,y){var g=_g[h&7];return g[0]*x+g[1]*y;}
+            return 0.5+0.5*(u*(v*(dot(_p[b+1],x-1,y-1)-dot(_p[a+1],x,y-1))+dot(_p[a+1],x,y-1)-dot(_p[b],x-1,y)+v*(dot(_p[b],x-1,y)-dot(_p[a],x,y)))+dot(_p[a],x,y)+v*(dot(_p[a+1],x,y-1)-dot(_p[a],x,y)));
+        }
+
+        // Colors
+        var CYAN={r:0,g:255,b:255}, PURPLE={r:160,g:100,b:255}, DARK={r:80,g:90,b:110};
+        function lerpC(a,b,t){return{r:a.r+(b.r-a.r)*t,g:a.g+(b.g-a.g)*t,b:a.b+(b.b-a.b)*t};}
+        function rgba(c,a){return'rgba('+Math.round(c.r)+','+Math.round(c.g)+','+Math.round(c.b)+','+a.toFixed(3)+')';}
+
+        // Grid state
+        var spacing = 80;
+        var points = [], edges = [];
 
         function resize() {
-            canvas.width = canvas.offsetWidth * Math.min(window.devicePixelRatio, 2);
-            canvas.height = canvas.offsetHeight * Math.min(window.devicePixelRatio, 2);
-        }
-        resize();
-        window.addEventListener('resize', resize);
-
-        function rnd(min, max) { return min + Math.random() * (max - min); }
-
-        // A segment is a short line that drifts
-        function spawnSegment() {
-            var w = canvas.width, h = canvas.height;
-            var cx = rnd(0, w), cy = rnd(0, h);
-            var angle = rnd(0, Math.PI * 2);
-            var len = rnd(30, 80) * Math.min(window.devicePixelRatio, 2);
-            return {
-                x: cx, y: cy,
-                vx: rnd(-0.3, 0.3),
-                vy: rnd(-0.3, 0.3),
-                angle: angle,
-                va: rnd(-0.003, 0.003), // angular velocity
-                len: len,
-                color: COLORS[Math.floor(Math.random() * COLORS.length)],
-                alpha: 0,
-                targetAlpha: rnd(0.15, 0.35),
-                life: rnd(6, 14), // seconds
-                maxLife: 0,
-                fading: false,
-            };
+            var dpr = Math.min(window.devicePixelRatio, 2);
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            buildGrid();
         }
 
-        function initSegments() {
-            var count = Math.floor(Math.min(canvas.width, 1400) / 70);
-            for (var i = 0; i < count; i++) {
-                var s = spawnSegment();
-                s.maxLife = s.life;
-                segments.push(s);
-            }
-        }
+        function buildGrid() {
+            points = []; edges = [];
+            var W = canvas.offsetWidth, H = canvas.offsetHeight;
+            var rowH = spacing * Math.sin(Math.PI / 3);
+            var cols = Math.ceil(W / spacing) + 3;
+            var rows = Math.ceil(H / rowH) + 3;
 
-        function getEndpoints(s) {
-            var dx = Math.cos(s.angle) * s.len * 0.5;
-            var dy = Math.sin(s.angle) * s.len * 0.5;
-            return {
-                x1: s.x - dx, y1: s.y - dy,
-                x2: s.x + dx, y2: s.y + dy
-            };
-        }
-
-        function distSq(x1, y1, x2, y2) {
-            return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-        }
-
-        function update(dt) {
-            var w = canvas.width, h = canvas.height;
-            var magDist = 120 * Math.min(window.devicePixelRatio, 2);
-            var magDistSq = magDist * magDist;
-
-            // Update segments
-            for (var i = segments.length - 1; i >= 0; i--) {
-                var s = segments[i];
-                s.life -= dt;
-
-                // Fade in
-                if (s.alpha < s.targetAlpha && !s.fading) {
-                    s.alpha = Math.min(s.alpha + dt * 0.4, s.targetAlpha);
+            for (var r = 0; r < rows; r++) {
+                var ox = (r % 2 === 1) ? spacing * 0.5 : 0;
+                for (var cl = 0; cl < cols; cl++) {
+                    points.push({ bx: cl * spacing + ox - spacing, by: r * rowH - rowH, x: 0, y: 0 });
                 }
-
-                // Fade out when life is low
-                if (s.life < 1.5) {
-                    s.fading = true;
-                    s.alpha = Math.max(0, s.alpha - dt * 0.3);
-                }
-
-                // Remove dead
-                if (s.life <= 0) {
-                    segments.splice(i, 1);
-                    // Respawn
-                    var ns = spawnSegment();
-                    ns.maxLife = ns.life;
-                    segments.push(ns);
-                    continue;
-                }
-
-                s.x += s.vx;
-                s.y += s.vy;
-                s.angle += s.va;
-
-                // Wrap around
-                if (s.x < -100) s.x = w + 100;
-                if (s.x > w + 100) s.x = -100;
-                if (s.y < -100) s.y = h + 100;
-                if (s.y > h + 100) s.y = -100;
             }
 
-            // Check proximity for magnetic connections
-            connections = [];
-            for (var i = 0; i < segments.length; i++) {
-                var a = segments[i];
-                var ea = getEndpoints(a);
-                for (var j = i + 1; j < segments.length; j++) {
-                    var b = segments[j];
-                    var eb = getEndpoints(b);
-
-                    // Check all 4 endpoint pairs, find closest
-                    var pairs = [
-                        [ea.x1, ea.y1, eb.x1, eb.y1],
-                        [ea.x1, ea.y1, eb.x2, eb.y2],
-                        [ea.x2, ea.y2, eb.x1, eb.y1],
-                        [ea.x2, ea.y2, eb.x2, eb.y2],
-                    ];
-
-                    for (var p = 0; p < pairs.length; p++) {
-                        var d = distSq(pairs[p][0], pairs[p][1], pairs[p][2], pairs[p][3]);
-                        if (d < magDistSq && d > 0) {
-                            var dist = Math.sqrt(d);
-                            var strength = 1 - dist / magDist;
-                            connections.push({
-                                x1: pairs[p][0], y1: pairs[p][1],
-                                x2: pairs[p][2], y2: pairs[p][3],
-                                strength: strength,
-                                colorA: a.color,
-                                alphaA: a.alpha,
-                                alphaB: b.alpha,
-                            });
-
-                            // Magnetic pull - gently attract endpoints
-                            var pull = strength * 0.02;
-                            var mx = (pairs[p][2] - pairs[p][0]) * pull;
-                            var my = (pairs[p][3] - pairs[p][1]) * pull;
-                            a.vx += mx;
-                            a.vy += my;
-                            b.vx -= mx;
-                            b.vy -= my;
-
-                            // Dampen velocity
-                            a.vx *= 0.99;
-                            a.vy *= 0.99;
-                            b.vx *= 0.99;
-                            b.vy *= 0.99;
-
-                            // If very close, accelerate fade (dissipate after meeting)
-                            if (dist < magDist * 0.2) {
-                                a.life = Math.min(a.life, 1.2);
-                                b.life = Math.min(b.life, 1.2);
-                                a.fading = true;
-                                b.fading = true;
-                            }
-                            break; // one connection per pair is enough
+            var edgeSet = {};
+            function addEdge(a, b) {
+                var key = Math.min(a,b) + '_' + Math.max(a,b);
+                if (!edgeSet[key]) { edgeSet[key] = true; edges.push([a, b]); }
+            }
+            for (var r = 0; r < rows; r++) {
+                for (var cl = 0; cl < cols; cl++) {
+                    var idx = r * cols + cl;
+                    if (cl < cols - 1) addEdge(idx, idx + 1);
+                    if (r < rows - 1) {
+                        var ni = (r + 1) * cols;
+                        if (r % 2 === 0) {
+                            if (cl < cols) addEdge(idx, ni + cl);
+                            if (cl > 0) addEdge(idx, ni + cl - 1);
+                        } else {
+                            if (cl < cols - 1) addEdge(idx, ni + cl + 1);
+                            if (cl < cols) addEdge(idx, ni + cl);
                         }
                     }
                 }
             }
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        resize();
+        window.addEventListener('resize', resize);
 
-            // Draw connections (magnetic bridges)
-            for (var i = 0; i < connections.length; i++) {
-                var c = connections[i];
-                var alpha = c.strength * Math.min(c.alphaA, c.alphaB) * 1.5;
-                ctx.beginPath();
-                ctx.moveTo(c.x1, c.y1);
-                ctx.lineTo(c.x2, c.y2);
-                ctx.strokeStyle = c.colorA.replace('A', alpha.toFixed(3));
-                ctx.lineWidth = c.strength * 1.5;
-                ctx.stroke();
-            }
+        // Particles
+        var particles = [];
+        var maxP = 180;
 
-            // Draw segments
-            for (var i = 0; i < segments.length; i++) {
-                var s = segments[i];
-                if (s.alpha <= 0.01) continue;
-                var e = getEndpoints(s);
-                ctx.beginPath();
-                ctx.moveTo(e.x1, e.y1);
-                ctx.lineTo(e.x2, e.y2);
-                ctx.strokeStyle = s.color.replace('A', s.alpha.toFixed(3));
-                ctx.lineWidth = 1.2;
-                ctx.lineCap = 'round';
-                ctx.stroke();
+        // Wave config
+        var CYCLE = 5;
+        var WAVE_SPEED = 350;
+        var START_OFFSET = 3.2;
 
-                // Small dot at endpoints
-                ctx.beginPath();
-                ctx.arc(e.x1, e.y1, 1.5, 0, Math.PI * 2);
-                ctx.fillStyle = s.color.replace('A', (s.alpha * 0.6).toFixed(3));
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(e.x2, e.y2, 1.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
+        var t = START_OFFSET;
         var lastTime = 0;
-        function animate(time) {
+        var firstFrame = true;
+
+        function frame(now) {
             if (!running) return;
-            var dt = Math.min((time - lastTime) / 1000, 0.1);
-            lastTime = time;
-            update(dt);
-            draw();
-            animId = requestAnimationFrame(animate);
+            if (firstFrame) { lastTime = now; firstFrame = false; }
+            var dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+            t += dt;
+
+            var W = canvas.offsetWidth, H = canvas.offsetHeight;
+
+            ctx.fillStyle = 'rgba(15,15,35,0.12)';
+            ctx.fillRect(0, 0, W, H);
+
+            // Wave source orbits center
+            var orbitR = Math.min(W, H) * 0.2;
+            var orbitAngle = (t / CYCLE) * Math.PI * 2 * 0.3;
+            var srcX = W * 0.5 + Math.cos(orbitAngle) * orbitR;
+            var srcY = H * 0.5 + Math.sin(orbitAngle) * orbitR;
+
+            var cycleT = (t % (CYCLE * 2)) / CYCLE;
+            var waveAge = t % CYCLE;
+            var waveRadius = waveAge * WAVE_SPEED;
+            var isCyanWave = cycleT < 1;
+
+            // Update points
+            for (var i = 0; i < points.length; i++) {
+                var p = points[i];
+                p.x = p.bx + (noise2(p.bx * 0.003 + t * 0.3, p.by * 0.003) - 0.5) * 35;
+                p.y = p.by + (noise2(p.bx * 0.003, p.by * 0.003 + t * 0.3) - 0.5) * 35;
+            }
+
+            // Draw edges
+            for (var i = 0; i < edges.length; i++) {
+                var a = points[edges[i][0]], b = points[edges[i][1]];
+                var mx = (a.x + b.x) * 0.5, my = (a.y + b.y) * 0.5;
+
+                var dx = mx - srcX, dy = my - srcY;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                var waveMix = Math.max(0, Math.min(1, (waveRadius - dist) / 80));
+
+                var brightCol = isCyanWave ? lerpC(PURPLE, CYAN, waveMix) : lerpC(CYAN, PURPLE, waveMix);
+
+                var brightness = noise2(mx * 0.005 + t * 0.6, my * 0.005);
+                var isBright = brightness > 0.5;
+                var alpha = isBright ? 0.12 + (brightness - 0.5) * 1.1 : 0.02 + brightness * 0.06;
+
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.strokeStyle = isBright ? rgba(brightCol, Math.min(alpha, 0.55)) : rgba(DARK, alpha);
+                ctx.lineWidth = isBright ? 1.0 : 0.4;
+                ctx.stroke();
+            }
+
+            // Bright vertices
+            for (var i = 0; i < points.length; i++) {
+                var p = points[i];
+                var vb = noise2(p.bx * 0.005 + t * 0.6, p.by * 0.005);
+                if (vb > 0.5) {
+                    var dx = p.x - srcX, dy = p.y - srcY;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    var waveMix = Math.max(0, Math.min(1, (waveRadius - dist) / 80));
+                    var col = isCyanWave ? lerpC(PURPLE, CYAN, waveMix) : lerpC(CYAN, PURPLE, waveMix);
+
+                    var va = 0.2 + (vb - 0.5) * 1.5;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2);
+                    ctx.fillStyle = rgba(col, Math.min(va, 0.7));
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = rgba(col, va * 0.12);
+                    ctx.fill();
+                }
+            }
+
+            // Emit particles from bright vertices
+            if (particles.length < maxP && Math.random() < 0.12) {
+                var si = Math.floor(Math.random() * points.length);
+                var src = points[si];
+                var vb = noise2(src.bx * 0.005 + t * 0.6, src.by * 0.005);
+                if (vb > 0.5) {
+                    var dx2 = src.x - srcX, dy2 = src.y - srcY;
+                    var dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+                    var wm = Math.max(0, Math.min(1, (waveRadius - dist2) / 80));
+                    var pc = isCyanWave ? lerpC(PURPLE, CYAN, wm) : lerpC(CYAN, PURPLE, wm);
+                    particles.push({ x: src.x, y: src.y, life: 2 + Math.random() * 3, size: 0.6 + Math.random() * 0.8, col: pc });
+                }
+            }
+
+            for (var i = particles.length - 1; i >= 0; i--) {
+                var pp = particles[i];
+                var angle = noise2(pp.x * 0.003 + t * 0.3, pp.y * 0.003) * Math.PI * 4;
+                pp.x += Math.cos(angle) * 0.6;
+                pp.y += Math.sin(angle) * 0.6;
+                pp.life -= dt;
+                if (pp.life <= 0 || pp.x < -20 || pp.x > W + 20 || pp.y < -20 || pp.y > H + 20) {
+                    particles.splice(i, 1); continue;
+                }
+                var palpha = Math.min(1, pp.life / 1.2) * 0.45;
+                ctx.beginPath();
+                ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+                ctx.fillStyle = rgba(pp.col, palpha);
+                ctx.fill();
+            }
+
+            animId = requestAnimationFrame(frame);
         }
 
         // Respect reduced motion
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
             running = false;
         } else {
-            initSegments();
-            animId = requestAnimationFrame(animate);
+            animId = requestAnimationFrame(frame);
         }
 
         // Expose stop/start for when game starts
@@ -1087,8 +1064,8 @@
         window.geoCanvasStart = function() {
             if (running) return;
             running = true;
-            lastTime = performance.now();
-            animId = requestAnimationFrame(animate);
+            firstFrame = true;
+            animId = requestAnimationFrame(frame);
         };
     })();
 
