@@ -403,6 +403,18 @@
             filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
         }
 
+        .detected-gesture.correct {
+            opacity: 1;
+            filter: drop-shadow(0 0 25px rgba(0, 255, 136, 0.7));
+            animation: correctPulse 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            40% { transform: scale(1.35); }
+            100% { transform: scale(1); }
+        }
+
         .detected-gesture.wrong {
             opacity: 1;
             filter: drop-shadow(0 0 20px rgba(255, 0, 0, 0.5));
@@ -1319,6 +1331,8 @@
 
         // Pause detection during celebration
         revealCooldown = true;
+        detectedGestureEl.classList.remove('matching');
+        detectedGestureEl.classList.add('correct');
         hintText.textContent = '答對了！';
 
         // Small burst at center
@@ -1329,6 +1343,7 @@
         // Wait a beat, then update the HUD card
         const taskIndex = gameState.tasks.indexOf(task);
         setTimeout(function() {
+            detectedGestureEl.classList.remove('correct');
             playSlotReel(taskIndex, task.gesture, function() {
                 const card = document.getElementById('task-card-' + taskIndex);
                 card.classList.add('collected');
