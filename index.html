@@ -433,11 +433,13 @@
         }
 
         .wrong-hint {
-            font-family: 'Roboto Mono', monospace;
-            font-size: clamp(0.85rem, 2.5vw, 1.1rem);
+            font-family: 'Exo', sans-serif;
+            font-size: clamp(1.4rem, 5.2vw, 1.8rem);
+            font-weight: 700;
             color: #ff6666;
+            text-shadow: 0 0 12px rgba(255, 100, 100, 0.4);
             text-align: center;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
             margin-top: 12px;
             opacity: 0;
             transition: opacity 0.25s ease-out;
@@ -449,13 +451,15 @@
 
         /* =============== HINT TEXT =============== */
         .hint-text {
-            font-family: 'Roboto Mono', monospace;
-            font-size: clamp(0.75rem, 2.2vw, 1rem);
-            color: var(--text-muted);
+            font-family: 'Exo', sans-serif;
+            font-size: clamp(1.3rem, 4.5vw, 1.7rem);
+            font-weight: 600;
+            color: #E2E8F0;
+            text-shadow: 0 0 10px rgba(226, 232, 240, 0.3);
             text-align: center;
             padding-bottom: env(safe-area-inset-bottom, 20px);
             margin-bottom: 20px;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
         }
 
         /* =============== SUCCESS SCREEN =============== */
