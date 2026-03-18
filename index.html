@@ -1294,24 +1294,10 @@
             if (check) check.style.opacity = '1';
         });
 
-        triggerFlash();
-
-        if (typeof createBurst === 'function') {
-            burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 300));
-            burstParticles.push(createBurst(0.5, 0.5, '#00FFFF', 150));
-        }
-
         const allCollected = gameState.tasks.every(t => t.collected);
         if (allCollected) {
             gameState.phase = 'CELEBRATING';
             hintText.textContent = 'All collected!';
-
-            if (typeof createBurst === 'function') {
-                burstParticles.push(createBurst(0.3, 0.4, '#7C3AED', 200));
-                burstParticles.push(createBurst(0.7, 0.4, '#FF006E', 200));
-                burstParticles.push(createBurst(0.5, 0.3, '#FFD700', 150));
-            }
-
             setTimeout(showSuccess, 2000);
         } else {
             hintText.textContent = 'Collected! Keep going...';
@@ -1362,9 +1348,6 @@
         hintText.textContent = hint;
         detectedGestureEl.classList.remove('matching');
         detectedGestureEl.textContent = '\u2717';
-
-        document.body.classList.add('shake');
-        setTimeout(() => { document.body.classList.remove('shake'); }, 500);
 
         setTimeout(() => {
             revealCooldown = false;
