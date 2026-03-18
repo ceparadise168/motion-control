@@ -403,33 +403,6 @@
             filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
         }
 
-        /* =============== REVEAL TEXT (big centered) =============== */
-        .reveal-text {
-            position: fixed;
-            left: 50%;
-            top: 58%;
-            transform: translate(-50%, -50%);
-            font-family: 'Exo', sans-serif;
-            font-size: clamp(2.2rem, 8vw, 4rem);
-            font-weight: 900;
-            letter-spacing: 6px;
-            color: #fff;
-            text-shadow:
-                0 0 12px rgba(0, 255, 255, 0.7),
-                0 0 40px rgba(0, 255, 255, 0.3);
-            z-index: 20;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.25s ease-out;
-        }
-        .reveal-text.show {
-            opacity: 1;
-        }
-        .reveal-text.fade-out {
-            opacity: 0;
-            transition: opacity 0.3s ease-in;
-        }
-
         /* =============== HINT TEXT =============== */
         .hint-text {
             font-family: 'Roboto Mono', monospace;
@@ -839,9 +812,6 @@
         </div>
         <div class="hint-text" id="hintText">Show your hand to the camera</div>
     </div>
-
-    <!-- Reveal Text (big centered Chinese label) -->
-    <div class="reveal-text" id="revealText"></div>
 
     <!-- Success Screen -->
     <div id="success-screen">
@@ -1308,33 +1278,21 @@
         spin();
     }
 
-    var revealTextEl = document.getElementById('revealText');
-    var revealInProgress = false;
-
-    function showRevealText(text, callback) {
-        revealInProgress = true;
-        revealTextEl.textContent = text;
-        revealTextEl.className = 'reveal-text';
-        void revealTextEl.offsetHeight;
-        revealTextEl.classList.add('show');
-
-        setTimeout(function() {
-            revealTextEl.classList.add('fade-out');
-            revealTextEl.classList.remove('show');
-            setTimeout(function() {
-                revealTextEl.className = 'reveal-text';
-                revealInProgress = false;
-                if (callback) callback();
-            }, 300);
-        }, 1200);
-    }
-
     function collectGesture(task) {
-        if (revealInProgress) return;
         task.collected = true;
         gameState.chargingGesture = -1;
         gameState.chargeStart = 0;
         updateProgressRing(0);
+
+        const taskIndex = gameState.tasks.indexOf(task);
+        playSlotReel(taskIndex, task.gesture, function() {
+            const card = document.getElementById('task-card-' + taskIndex);
+            card.classList.add('collected');
+            const label = card.querySelector('.theme-label');
+            if (label) label.textContent = task.themeZh;
+            const check = card.querySelector('.check-mark');
+            if (check) check.style.opacity = '1';
+        });
 
         triggerFlash();
 
@@ -1343,34 +1301,21 @@
             burstParticles.push(createBurst(0.5, 0.5, '#00FFFF', 150));
         }
 
-        // Show big centered Chinese text first, then update HUD slot
-        const taskIndex = gameState.tasks.indexOf(task);
-        showRevealText(task.themeZh, function() {
-            playSlotReel(taskIndex, task.gesture, function() {
-                const card = document.getElementById('task-card-' + taskIndex);
-                card.classList.add('collected');
-                const label = card.querySelector('.theme-label');
-                if (label) label.textContent = task.themeZh;
-                const check = card.querySelector('.check-mark');
-                if (check) check.style.opacity = '1';
+        const allCollected = gameState.tasks.every(t => t.collected);
+        if (allCollected) {
+            gameState.phase = 'CELEBRATING';
+            hintText.textContent = 'All collected!';
 
-                const allCollected = gameState.tasks.every(t => t.collected);
-                if (allCollected) {
-                    gameState.phase = 'CELEBRATING';
-                    hintText.textContent = 'All collected!';
+            if (typeof createBurst === 'function') {
+                burstParticles.push(createBurst(0.3, 0.4, '#7C3AED', 200));
+                burstParticles.push(createBurst(0.7, 0.4, '#FF006E', 200));
+                burstParticles.push(createBurst(0.5, 0.3, '#FFD700', 150));
+            }
 
-                    if (typeof createBurst === 'function') {
-                        burstParticles.push(createBurst(0.3, 0.4, '#7C3AED', 200));
-                        burstParticles.push(createBurst(0.7, 0.4, '#FF006E', 200));
-                        burstParticles.push(createBurst(0.5, 0.3, '#FFD700', 150));
-                    }
-
-                    setTimeout(showSuccess, 2000);
-                } else {
-                    hintText.textContent = 'Collected! Keep going...';
-                }
-            });
-        });
+            setTimeout(showSuccess, 2000);
+        } else {
+            hintText.textContent = 'Collected! Keep going...';
+        }
     }
 
     function triggerFlash() {
