@@ -2139,13 +2139,26 @@
         var palmW = getPalmWidth(landmarks);
         if (palmW === 0) return false;
 
+        // Strategy 1: all fingertips close to palm center (distance-based)
         var tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
         var allClose = tips.every(function(tip) {
-            return dist2D(tip, palmCenter) < palmW * 1.2;
+            return dist2D(tip, palmCenter) < palmW * 1.5;
         });
-        var thumbClose = dist2D(landmarks[4], palmCenter) < palmW * 1.3;
 
-        return allClose && thumbClose;
+        // Strategy 2: all fingers have curled joints (angle-based)
+        var allCurled = true;
+        for (var i = 0; i < FINGER_LANDMARKS.length; i++) {
+            var fl = FINGER_LANDMARKS[i];
+            var pipAngle = angleDeg2D(landmarks[fl[0]], landmarks[fl[1]], landmarks[fl[2]]);
+            if (pipAngle > 130) { allCurled = false; break; }
+        }
+
+        // Thumb: not significantly extended (more lenient than isThumbExtended)
+        var thumbDist = dist2D(landmarks[4], palmCenter);
+        var thumbNotOut = thumbDist < palmW * 1.5;
+
+        // Pass if either strategy works + thumb is not way out
+        return (allClose || allCurled) && thumbNotOut;
     }
 
     function isSix(landmarks, handedness) {
@@ -2185,7 +2198,7 @@
         // Vulcan: all fingers out with middle-ring split
         if (isVulcan(landmarks)) return 5;
 
-        if (fist && !thumbOut) return 0;
+        if (fist) return 0;
 
         if (result.gestures.length > 0) {
             let best = result.gestures[0];
@@ -2206,15 +2219,15 @@
             if ((gestureName === 'three' || gestureName === 'four' || gestureName === 'open_palm') && thumbOut) {
                 return 3; // five (open palm with thumb)
             }
-            if (gestureName === 'fist' && thumbOut && extendedFingers === 0) {
-                return -1; // thumbs up — ignored
+            if (gestureName === 'fist') {
+                return 0; // fist (isFist already handles thumb check)
             }
 
             var idx = GESTURE_NAME_TO_INDEX[gestureName];
             return (idx !== undefined && idx >= 0) ? idx : -1;
         }
 
-        if (thumbOut && extendedFingers === 0) return -1; // thumbs up — ignored
+        if (thumbOut && extendedFingers === 0) return 0; // likely fist with thumb out
         if (extendedFingers >= 3 && thumbOut) return 3;  // five
         if (!thumbOut) {
             if (extendedFingers === 0) return 0; // fist
