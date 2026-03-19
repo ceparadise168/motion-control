@@ -1572,46 +1572,51 @@
             burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 80));
         }
 
-        // Step 1: Show emoji zoom animation (600ms)
-        // Step 2: Show corresponding number
+        // Step 1: Emoji zoom animation (correct class, 800ms)
+        // Step 2: Show number for 1.7s
+        // Step 3: Update HUD card
         const taskIndex = gameState.tasks.indexOf(task);
+
         setTimeout(function() {
+            // Step 2: Switch to number display
             detectedGestureEl.classList.remove('correct');
             detectedGestureEl.classList.add('show-number');
             detectedGestureEl.textContent = String(task.gesture);
-        }, 800);
 
-        // Step 3: Clear number, update HUD card
-        setTimeout(function() {
-            detectedGestureEl.classList.remove('show-number');
-            playSlotReel(taskIndex, task.gesture, function() {
-                const card = document.getElementById('task-card-' + taskIndex);
-                card.classList.add('collected');
-                const label = card.querySelector('.theme-label');
-                if (label) label.textContent = task.themeZh;
-                const check = card.querySelector('.check-mark');
-                if (check) check.style.opacity = '1';
+            setTimeout(function() {
+                // Step 3: Hide center display, update card
+                detectedGestureEl.classList.remove('show-number');
+                detectedGestureEl.textContent = '?';
+                detectedGestureEl.classList.remove('matching');
 
-                const allCollected = gameState.tasks.every(t => t.collected);
-                if (allCollected) {
-                    gameState.phase = 'CELEBRATING';
-                    hintText.textContent = '全部解鎖完成！';
+                playSlotReel(taskIndex, task.gesture, function() {
+                    const card = document.getElementById('task-card-' + taskIndex);
+                    card.classList.add('collected');
+                    const label = card.querySelector('.theme-label');
+                    if (label) label.textContent = task.themeZh;
+                    const check = card.querySelector('.check-mark');
+                    if (check) check.style.opacity = '1';
 
-                    // Big celebration bursts
-                    if (typeof createBurst === 'function') {
-                        burstParticles.push(createBurst(0.3, 0.3, '#7C3AED', 200));
-                        burstParticles.push(createBurst(0.7, 0.3, '#FF006E', 200));
-                        burstParticles.push(createBurst(0.5, 0.2, '#FFD700', 200));
-                        burstParticles.push(createBurst(0.2, 0.5, '#00FFFF', 150));
-                        burstParticles.push(createBurst(0.8, 0.5, '#00ff88', 150));
+                    const allCollected = gameState.tasks.every(t => t.collected);
+                    if (allCollected) {
+                        gameState.phase = 'CELEBRATING';
+                        hintText.textContent = '全部解鎖完成！';
+
+                        if (typeof createBurst === 'function') {
+                            burstParticles.push(createBurst(0.3, 0.3, '#7C3AED', 200));
+                            burstParticles.push(createBurst(0.7, 0.3, '#FF006E', 200));
+                            burstParticles.push(createBurst(0.5, 0.2, '#FFD700', 200));
+                            burstParticles.push(createBurst(0.2, 0.5, '#00FFFF', 150));
+                            burstParticles.push(createBurst(0.8, 0.5, '#00ff88', 150));
+                        }
+
+                        setTimeout(showSuccess, 2000);
+                    } else {
+                        revealCooldown = false;
                     }
-
-                    setTimeout(showSuccess, 2000);
-                } else {
-                    revealCooldown = false;
-                }
-            });
-        }, 2500);
+                });
+            }, 1700);
+        }, 800);
     }
 
     function triggerFlash() {
