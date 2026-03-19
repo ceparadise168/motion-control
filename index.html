@@ -845,6 +845,106 @@
 
         .copy-toast.visible { opacity: 1; }
 
+        /* =============== HELP BUTTON & MODAL =============== */
+        .help-btn {
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom));
+            right: 20px;
+            z-index: 20;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid var(--card-border);
+            background: rgba(15, 15, 35, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.3s, color 0.3s;
+            pointer-events: auto;
+        }
+        .help-btn:hover {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        .help-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 100;
+            background: rgba(10, 10, 26, 0.85);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .help-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .help-modal {
+            background: rgba(15, 15, 35, 0.95);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 28px 24px;
+            max-width: 320px;
+            width: 85vw;
+            text-align: center;
+        }
+        .help-modal-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--neon-cyan);
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+        .help-gestures {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .help-gesture-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .help-gesture-item .emoji {
+            font-size: 2rem;
+        }
+        .help-gesture-item .label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+        .help-close-btn {
+            background: none;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-muted);
+            padding: 8px 28px;
+            font-family: 'Exo', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: border-color 0.3s, color 0.3s;
+        }
+        .help-close-btn:hover {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
         /* =============== REDUCED MOTION =============== */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
@@ -915,6 +1015,24 @@
             <div class="wrong-hint" id="wrongHint"></div>
         </div>
         <div class="hint-text" id="hintText">比一個手勢來猜猜看</div>
+        <button class="help-btn" id="helpBtn" onclick="toggleHelp()">?</button>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="help-overlay" id="helpOverlay" onclick="toggleHelp()">
+        <div class="help-modal" onclick="event.stopPropagation()">
+            <div class="help-modal-title">可使用的手勢</div>
+            <div class="help-gestures">
+                <div class="help-gesture-item"><span class="emoji">✊</span><span class="label">拳頭</span></div>
+                <div class="help-gesture-item"><span class="emoji">☝️</span><span class="label">一</span></div>
+                <div class="help-gesture-item"><span class="emoji">✌️</span><span class="label">二</span></div>
+                <div class="help-gesture-item"><span class="emoji">🤟</span><span class="label">三</span></div>
+                <div class="help-gesture-item"><span class="emoji">🖖</span><span class="label">四</span></div>
+                <div class="help-gesture-item"><span class="emoji">🖐️</span><span class="label">五</span></div>
+                <div class="help-gesture-item"><span class="emoji">👍</span><span class="label">讚</span></div>
+            </div>
+            <button class="help-close-btn" onclick="toggleHelp()">知道了</button>
+        </div>
     </div>
 
     <!-- Success Screen -->
@@ -2123,6 +2241,11 @@
 
     function getShareUrl() {
         return window.location.href.split('?')[0].split('#')[0];
+    }
+
+    function toggleHelp() {
+        var overlay = document.getElementById('helpOverlay');
+        overlay.classList.toggle('show');
     }
 
     function openShareModal() {
