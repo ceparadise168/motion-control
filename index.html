@@ -405,13 +405,30 @@
         .detected-gesture.correct {
             opacity: 1;
             filter: drop-shadow(0 0 25px rgba(0, 255, 136, 0.7));
-            animation: correctPulse 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: correctZoom 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        @keyframes correctPulse {
+        @keyframes correctZoom {
             0% { transform: scale(1); }
-            40% { transform: scale(1.35); }
+            30% { transform: scale(1.5); }
+            60% { transform: scale(1.3); }
             100% { transform: scale(1); }
+        }
+
+        .detected-gesture.show-number {
+            opacity: 1;
+            filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.8));
+            animation: numberPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            font-family: 'Exo', sans-serif;
+            font-weight: 900;
+            color: var(--neon-green);
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+        }
+
+        @keyframes numberPop {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); opacity: 1; }
         }
 
         .detected-gesture.wrong {
@@ -1554,10 +1571,18 @@
             burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 80));
         }
 
-        // Wait a beat, then update the HUD card
+        // Step 1: Show emoji zoom animation (600ms)
+        // Step 2: Show corresponding number
         const taskIndex = gameState.tasks.indexOf(task);
         setTimeout(function() {
             detectedGestureEl.classList.remove('correct');
+            detectedGestureEl.classList.add('show-number');
+            detectedGestureEl.textContent = task.gesture;
+        }, 700);
+
+        // Step 3: Clear number, update HUD card
+        setTimeout(function() {
+            detectedGestureEl.classList.remove('show-number');
             playSlotReel(taskIndex, task.gesture, function() {
                 const card = document.getElementById('task-card-' + taskIndex);
                 card.classList.add('collected');
@@ -1585,7 +1610,7 @@
                     revealCooldown = false;
                 }
             });
-        }, 800);
+        }, 1400);
     }
 
     function triggerFlash() {
