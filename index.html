@@ -519,7 +519,7 @@
         .success-cards {
             display: flex; gap: 16px;
             justify-content: center;
-            flex-wrap: wrap;
+            align-items: stretch;
         }
 
         .success-card {
@@ -530,7 +530,8 @@
             border-radius: 12px;
             padding: 14px 18px;
             text-align: center;
-            min-width: min(100px, 28vw);
+            width: min(110px, 28vw);
+            flex-shrink: 0;
             position: relative;
             overflow: hidden;
             opacity: 0;
@@ -1475,9 +1476,8 @@
 
     function revealWrongGesture() {
         revealCooldown = true;
-        resetCharge();
-
         const wrongG = gameState.chargingGesture;
+        resetCharge();
         const alreadyTried = triedWrongGestures.has(wrongG);
         triedWrongGestures.add(wrongG);
 
