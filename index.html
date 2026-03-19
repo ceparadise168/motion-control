@@ -1910,10 +1910,7 @@
         var extendedFingers = countExtendedFingers(landmarks);
         var fist = isFist(landmarks);
 
-        // Thumbs up: thumb out, no other fingers extended — check before fist
-        if (thumbOut && extendedFingers === 0) return 6;
-
-        if (fist) return 0;
+        if (fist && !thumbOut) return 0;
 
         if (result.gestures.length > 0) {
             let best = result.gestures[0];
