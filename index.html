@@ -1063,6 +1063,7 @@
                 <div class="help-gesture-item"><span class="emoji">✌️</span><span class="label">兩根手指</span></div>
                 <div class="help-gesture-item"><span class="emoji">🖐️</span><span class="label">五根手指</span></div>
                 <div class="help-gesture-item"><span class="emoji">👍</span><span class="label">讚</span></div>
+                <div class="help-gesture-item"><span class="emoji">🤙</span><span class="label">六</span></div>
             </div>
             <div class="help-easter-egg" id="helpEasterEgg">🐱</div>
             <button class="help-close-btn" onclick="toggleHelp()">知道了</button>
@@ -1329,9 +1330,9 @@
     // ============================================================
     // CONFIG
     // ============================================================
-    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83D\uDC4D'];
-    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Thumbs Up (4)'];
-    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '讚'];
+    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83D\uDC4D', '\uD83E\uDD19'];
+    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Thumbs Up (4)', 'Six (5)'];
+    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '讚', '六六大順'];
     const FIXED_GESTURES = [1, 2, 0];
     const CHARGE_DURATION = 1200;
 
@@ -2054,6 +2055,16 @@
         return allClose && thumbClose;
     }
 
+    function isSix(landmarks, handedness) {
+        // Six gesture: thumb + pinky extended, index/middle/ring curled
+        var thumbOut = isThumbExtended(landmarks, handedness);
+        var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
+        var indexCurled = !isFingerExtended(landmarks, 5, 6, 8);
+        var middleCurled = !isFingerExtended(landmarks, 9, 10, 12);
+        var ringCurled = !isFingerExtended(landmarks, 13, 14, 16);
+        return thumbOut && pinkyOut && indexCurled && middleCurled && ringCurled;
+    }
+
     function recognizeGesture(landmarks, handedness) {
         const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
 
@@ -2062,6 +2073,9 @@
         var thumbOut = isThumbExtended(landmarks, handedness);
         var extendedFingers = countExtendedFingers(landmarks);
         var fist = isFist(landmarks);
+
+        // Six: thumb + pinky out, others curled — check early
+        if (isSix(landmarks, handedness)) return 5;
 
         if (fist && !thumbOut) return 0;
 
