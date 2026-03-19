@@ -415,21 +415,25 @@
             100% { transform: scale(1); }
         }
 
-        .detected-gesture.show-number {
-            opacity: 1;
-            filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.8));
-            animation: numberPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        .number-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0);
             font-family: 'Exo', 'Helvetica Neue', Arial, sans-serif;
+            font-size: clamp(3.5rem, 12vw, 7rem);
             font-weight: 900;
-            color: var(--neon-green);
-            -webkit-text-fill-color: var(--neon-green);
+            color: #00ff88;
             text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+            filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.8));
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 2;
         }
 
-        @keyframes numberPop {
-            0% { transform: scale(0.3); opacity: 0; }
-            50% { transform: scale(1.3); }
-            100% { transform: scale(1); opacity: 1; }
+        .number-overlay.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
         }
 
         .detected-gesture.wrong {
@@ -1064,6 +1068,7 @@
                     <circle class="fg" id="progressCircle" cx="75" cy="75" r="70"/>
                 </svg>
                 <div class="detected-gesture" id="detectedGesture">?</div>
+                <div class="number-overlay" id="numberOverlay"></div>
             </div>
             <div class="wrong-hint" id="wrongHint"></div>
         </div>
@@ -1554,68 +1559,65 @@
         spin();
     }
 
+    var numberOverlay = document.getElementById('numberOverlay');
+
     function collectGesture(task) {
         task.collected = true;
         gameState.chargingGesture = -1;
         gameState.chargeStart = 0;
         updateProgressRing(0);
-
-        // Pause detection during celebration
         revealCooldown = true;
+
+        var taskIndex = gameState.tasks.indexOf(task);
+
+        // Step 1: Emoji zoom (0–600ms)
         detectedGestureEl.classList.remove('matching');
         detectedGestureEl.classList.add('correct');
         hintText.textContent = '猜對了！解鎖成功！';
-
-        // Small burst at center
         if (typeof createBurst === 'function') {
             burstParticles.push(createBurst(0.5, 0.5, '#00ff88', 80));
         }
 
-        // Step 1: Emoji zoom animation (correct class, 800ms)
-        // Step 2: Show number for 1.7s
-        // Step 3: Update HUD card
-        const taskIndex = gameState.tasks.indexOf(task);
-
+        // Step 2: Show number in separate overlay (600ms–1800ms)
         setTimeout(function() {
-            // Step 2: Switch to number display
             detectedGestureEl.classList.remove('correct');
-            detectedGestureEl.classList.add('show-number');
-            detectedGestureEl.textContent = String(task.gesture);
+            detectedGestureEl.textContent = '';
+            detectedGestureEl.style.opacity = '0';
+            numberOverlay.textContent = String(task.gesture);
+            numberOverlay.classList.add('show');
+        }, 600);
 
-            setTimeout(function() {
-                // Step 3: Hide center display, update card
-                detectedGestureEl.classList.remove('show-number');
-                detectedGestureEl.textContent = '?';
-                detectedGestureEl.classList.remove('matching');
+        // Step 3: Hide number, update card (1800ms)
+        setTimeout(function() {
+            numberOverlay.classList.remove('show');
+            detectedGestureEl.style.opacity = '';
+            detectedGestureEl.textContent = '?';
 
-                playSlotReel(taskIndex, task.gesture, function() {
-                    const card = document.getElementById('task-card-' + taskIndex);
-                    card.classList.add('collected');
-                    const label = card.querySelector('.theme-label');
-                    if (label) label.textContent = task.themeZh;
-                    const check = card.querySelector('.check-mark');
-                    if (check) check.style.opacity = '1';
+            playSlotReel(taskIndex, task.gesture, function() {
+                var card = document.getElementById('task-card-' + taskIndex);
+                card.classList.add('collected');
+                var label = card.querySelector('.theme-label');
+                if (label) label.textContent = task.themeZh;
+                var check = card.querySelector('.check-mark');
+                if (check) check.style.opacity = '1';
 
-                    const allCollected = gameState.tasks.every(t => t.collected);
-                    if (allCollected) {
-                        gameState.phase = 'CELEBRATING';
-                        hintText.textContent = '全部解鎖完成！';
-
-                        if (typeof createBurst === 'function') {
-                            burstParticles.push(createBurst(0.3, 0.3, '#7C3AED', 200));
-                            burstParticles.push(createBurst(0.7, 0.3, '#FF006E', 200));
-                            burstParticles.push(createBurst(0.5, 0.2, '#FFD700', 200));
-                            burstParticles.push(createBurst(0.2, 0.5, '#00FFFF', 150));
-                            burstParticles.push(createBurst(0.8, 0.5, '#00ff88', 150));
-                        }
-
-                        setTimeout(showSuccess, 2000);
-                    } else {
-                        revealCooldown = false;
+                var allCollected = gameState.tasks.every(function(t) { return t.collected; });
+                if (allCollected) {
+                    gameState.phase = 'CELEBRATING';
+                    hintText.textContent = '全部解鎖完成！';
+                    if (typeof createBurst === 'function') {
+                        burstParticles.push(createBurst(0.3, 0.3, '#7C3AED', 200));
+                        burstParticles.push(createBurst(0.7, 0.3, '#FF006E', 200));
+                        burstParticles.push(createBurst(0.5, 0.2, '#FFD700', 200));
+                        burstParticles.push(createBurst(0.2, 0.5, '#00FFFF', 150));
+                        burstParticles.push(createBurst(0.8, 0.5, '#00ff88', 150));
                     }
-                });
-            }, 1800);
-        }, 800);
+                    setTimeout(showSuccess, 2000);
+                } else {
+                    revealCooldown = false;
+                }
+            });
+        }, 1800);
     }
 
     function triggerFlash() {
