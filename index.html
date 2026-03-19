@@ -1581,7 +1581,7 @@
             // Step 2: Switch to number display
             detectedGestureEl.classList.remove('correct');
             detectedGestureEl.classList.add('show-number');
-            detectedGestureEl.textContent = String(task.gesture);
+            detectedGestureEl.textContent = String(task.gesture) + '\uFE0E';
 
             setTimeout(function() {
                 // Step 3: Hide center display, update card
@@ -1615,7 +1615,7 @@
                         revealCooldown = false;
                     }
                 });
-            }, 1700);
+            }, 2200);
         }, 800);
     }
 
