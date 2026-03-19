@@ -1321,10 +1321,8 @@
                     }
                 });
             } else {
-                if (isNewGesture) {
-                    gameState.chargingGesture = detectedFingers;
-                    gameState.chargeStart = performance.now();
-                }
+                // Unrecognized gesture — reset charge, don't start a new one
+                resetCharge();
                 detectedGestureEl.classList.add('matching');
                 detectedGestureEl.textContent = '?';
 
@@ -1478,6 +1476,13 @@
         revealCooldown = true;
         const wrongG = gameState.chargingGesture;
         resetCharge();
+
+        // Safety: skip if gesture index is invalid
+        if (wrongG < 0 || wrongG >= GESTURE_ICONS.length) {
+            revealCooldown = false;
+            return;
+        }
+
         const alreadyTried = triedWrongGestures.has(wrongG);
         triedWrongGestures.add(wrongG);
 
