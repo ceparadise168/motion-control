@@ -148,14 +148,14 @@
         }
 
         .start-subtitle {
-            font-family: 'Roboto Mono', monospace;
-            font-size: clamp(0.8rem, 2vw, 1rem);
-            color: var(--text-muted);
+            font-family: 'Exo', sans-serif;
+            font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+            color: var(--neon-cyan);
             text-align: center;
             max-width: 400px;
             padding: 0 20px;
             letter-spacing: 2px;
-            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
             position: relative;
             z-index: 1;
         }
@@ -222,11 +222,10 @@
         }
 
         .start-hint {
-            font-family: 'Roboto Mono', monospace;
-            font-size: clamp(0.8rem, 2vw, 1rem);
+            font-family: 'Exo', sans-serif;
+            font-size: clamp(0.85rem, 2.2vw, 1rem);
             color: var(--text-muted);
-            letter-spacing: 6px;
-            text-transform: uppercase;
+            letter-spacing: 3px;
             position: relative;
             z-index: 1;
         }
@@ -866,7 +865,7 @@
     <div id="start-screen">
         <canvas id="geoCanvas"></canvas>
         <div class="start-title">Gesture<br>Collection</div>
-        <div class="start-subtitle">// detect . collect . complete</div>
+        <div class="start-subtitle">猜出 3 個隱藏手勢，解鎖全部卡片</div>
         <div class="mystery-slots">
             <div class="mystery-slot">
                 <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--neon-gold)">
@@ -884,8 +883,8 @@
                 </svg>
             </div>
         </div>
-        <div class="start-hint">HAND &#8594; GAME</div>
-        <button id="start-btn">Initialize</button>
+        <div class="start-hint">對鏡頭比手勢來猜答案</div>
+        <button id="start-btn">開始挑戰</button>
         <button class="share-btn" onclick="openShareModal()">
             <span class="share-icon"><svg viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span>
             Share
@@ -914,7 +913,7 @@
             </div>
             <div class="wrong-hint" id="wrongHint"></div>
         </div>
-        <div class="hint-text" id="hintText">Show your hand to the camera</div>
+        <div class="hint-text" id="hintText">比一個手勢來猜猜看</div>
     </div>
 
     <!-- Success Screen -->
@@ -1228,6 +1227,7 @@
         stableConfirmed = -1;
         revealCooldown = false;
         wrongHintIndex = 0;
+        triedWrongGestures = new Set();
 
         renderTaskPanel();
         startScreen.style.display = 'none';
@@ -1238,7 +1238,7 @@
         detectedGestureEl.textContent = '?';
         detectedGestureEl.classList.remove('matching');
         updateProgressRing(0);
-        hintText.textContent = '\u5C07\u624B\u638C\u5C0D\u6E96\u93E1\u982D';
+        hintText.textContent = '比一個手勢來猜猜看';
     }
 
     function createCheckSvg() {
@@ -1271,7 +1271,7 @@
 
             const label = document.createElement('div');
             label.className = 'theme-label';
-            label.textContent = task.collected ? task.themeZh : '???';
+            label.textContent = task.collected ? task.themeZh : '待解鎖';
 
             const check = document.createElement('span');
             check.className = 'check-mark';
@@ -1287,9 +1287,11 @@
     // ============================================================
     // CHARGE LOGIC
     // ============================================================
-    const WRONG_GESTURE_HINTS = ['再換一個試試', '不是這個喔', '換個手勢吧', '再試試看', '不太對喔'];
+    const GESTURE_NAMES_ZH = ['拳頭', '一根手指', '兩根手指', '三根手指', '四根手指', '手掌'];
+    const WRONG_GESTURE_HINTS = ['不是這個，換一個試試！', '這個不對喔，試別的！', '猜錯了，再換一個！'];
     let wrongHintIndex = 0;
     let revealCooldown = false;
+    let triedWrongGestures = new Set();
 
     function updateCharge(detectedFingers, handVisible) {
         if (gameState.phase !== 'PLAYING') return;
@@ -1338,7 +1340,7 @@
             });
             const uncollected = gameState.tasks.filter(t => !t.collected);
             if (uncollected.length > 0) {
-                hintText.textContent = uncollected.length + ' remaining';
+                hintText.textContent = '還剩 ' + uncollected.length + ' 個未解鎖';
             }
         }
     }
@@ -1392,7 +1394,7 @@
         revealCooldown = true;
         detectedGestureEl.classList.remove('matching');
         detectedGestureEl.classList.add('correct');
-        hintText.textContent = '答對了！';
+        hintText.textContent = '猜對了！解鎖成功！';
 
         // Small burst at center
         if (typeof createBurst === 'function') {
@@ -1414,7 +1416,7 @@
                 const allCollected = gameState.tasks.every(t => t.collected);
                 if (allCollected) {
                     gameState.phase = 'CELEBRATING';
-                    hintText.textContent = '全部答對了！';
+                    hintText.textContent = '全部解鎖完成！';
 
                     // Big celebration bursts
                     if (typeof createBurst === 'function') {
@@ -1454,7 +1456,7 @@
         updateProgressRing(progress);
 
         var chargingIcon = gameState.chargingGesture >= 0 ? GESTURE_ICONS[gameState.chargingGesture] : '?';
-        hintText.textContent = chargingIcon + ' Detecting... ' + Math.round(progress * 100) + '%';
+        hintText.textContent = chargingIcon + ' 辨識中... ' + Math.round(progress * 100) + '%';
 
         if (progress >= 1) {
             const task = gameState.tasks.find(
@@ -1475,8 +1477,17 @@
         revealCooldown = true;
         resetCharge();
 
-        const hint = WRONG_GESTURE_HINTS[wrongHintIndex % WRONG_GESTURE_HINTS.length];
-        wrongHintIndex++;
+        const wrongG = gameState.chargingGesture;
+        const alreadyTried = triedWrongGestures.has(wrongG);
+        triedWrongGestures.add(wrongG);
+
+        let hint;
+        if (alreadyTried) {
+            hint = GESTURE_ICONS[wrongG] + ' 已經猜過了，換別的！';
+        } else {
+            hint = GESTURE_ICONS[wrongG] + ' ' + WRONG_GESTURE_HINTS[wrongHintIndex % WRONG_GESTURE_HINTS.length];
+            wrongHintIndex++;
+        }
 
         // Keep the detected emoji visible but style it as wrong
         detectedGestureEl.classList.remove('matching');
@@ -1486,7 +1497,14 @@
         // Show hint near the ring instead of at the bottom
         wrongHintEl.textContent = hint;
         wrongHintEl.classList.add('show');
-        hintText.textContent = '';
+
+        // Show already-tried gestures at bottom
+        if (triedWrongGestures.size > 0) {
+            const triedList = Array.from(triedWrongGestures).map(g => GESTURE_ICONS[g]).join(' ');
+            hintText.textContent = '已排除：' + triedList;
+        } else {
+            hintText.textContent = '';
+        }
 
         setTimeout(() => {
             revealCooldown = false;
@@ -1496,7 +1514,10 @@
             wrongHintEl.classList.remove('show');
             const uncollected = gameState.tasks.filter(t => !t.collected);
             if (uncollected.length > 0) {
-                hintText.textContent = uncollected.length + ' remaining';
+                const triedList = triedWrongGestures.size > 0
+                    ? '　已排除：' + Array.from(triedWrongGestures).map(g => GESTURE_ICONS[g]).join(' ')
+                    : '';
+                hintText.textContent = '還剩 ' + uncollected.length + ' 個' + triedList;
             }
         }, 1500);
     }
@@ -1688,7 +1709,7 @@
                 gameState.tasks.forEach((t, i) => {
                     document.getElementById('task-card-' + i).classList.remove('active');
                 });
-                hintText.textContent = '\u5C07\u624B\u638C\u5C0D\u6E96\u93E1\u982D';
+                hintText.textContent = '比一個手勢來猜猜看';
             }
             return;
         }
