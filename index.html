@@ -923,6 +923,16 @@
         }
         .help-gesture-item .emoji {
             font-size: 2rem;
+            line-height: 1.2;
+        }
+        .help-gesture-item .emoji-text {
+            font-size: 1.6rem;
+            font-weight: 800;
+            line-height: 1.2;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         .help-gesture-item .num {
             font-size: 0.6rem;
@@ -1041,11 +1051,10 @@
             <div class="help-modal-title">可使用的手勢</div>
             <div class="help-gestures">
                 <div class="help-gesture-item"><span class="num">1</span><span class="emoji">✊</span><span class="label">拳頭</span></div>
-                <div class="help-gesture-item"><span class="num">2</span><span class="emoji">☝️</span><span class="label">一</span></div>
-                <div class="help-gesture-item"><span class="num">3</span><span class="emoji">✌️</span><span class="label">二</span></div>
-                <div class="help-gesture-item"><span class="num">4</span><span class="emoji">🖖</span><span class="label">三</span></div>
-                <div class="help-gesture-item"><span class="num">5</span><span class="emoji">🖐️</span><span class="label">五</span></div>
-                <div class="help-gesture-item"><span class="num">6</span><span class="emoji">👍</span><span class="label">讚</span></div>
+                <div class="help-gesture-item"><span class="num">2</span><span class="emoji">☝️</span><span class="label">一根手指</span></div>
+                <div class="help-gesture-item"><span class="num">3</span><span class="emoji">✌️</span><span class="label">兩根手指</span></div>
+                <div class="help-gesture-item"><span class="num">4</span><span class="emoji">🖐️</span><span class="label">五根手指</span></div>
+                <div class="help-gesture-item"><span class="num">5</span><span class="emoji">👍</span><span class="label">讚</span></div>
             </div>
             <div class="help-easter-egg" id="helpEasterEgg">🐱</div>
             <button class="help-close-btn" onclick="toggleHelp()">知道了</button>
@@ -1312,9 +1321,9 @@
     // ============================================================
     // CONFIG
     // ============================================================
-    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83E\uDD1F', '\uD83D\uDD96', '\uD83D\uDD90\uFE0F', '\uD83D\uDC4D'];
-    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Three (3)', 'Four (4)', 'Five (5)', 'Thumbs Up (6)'];
-    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '也不是這個', '再加油一下', '不是這個', '讚'];
+    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83D\uDC4D'];
+    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Thumbs Up (4)'];
+    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '讚'];
     const FIXED_GESTURES = [1, 2, 0];
     const CHARGE_DURATION = 1200;
 
@@ -1932,8 +1941,8 @@
     ]);
 
     const GESTURE_NAME_TO_INDEX = {
-        'fist': 0, 'one': 1, 'two': 2, 'three': 3,
-        'four': 4, 'open_palm': 5, 'thumbs_up': 6
+        'fist': 0, 'one': 1, 'two': 2, 'three': -1,
+        'four': -1, 'open_palm': 3, 'thumbs_up': 4
     };
     const GESTURE_MIN_SCORE = 8.0;
 
@@ -2059,28 +2068,29 @@
             var gestureName = best.name;
 
             if (gestureName === 'open_palm' && !thumbOut) {
-                return extendedFingers >= 1 ? extendedFingers : -1;
+                // Without thumb: map by finger count (only 1 and 2 have indices)
+                if (extendedFingers === 1) return 1;
+                if (extendedFingers === 2) return 2;
+                return -1;
             }
-            if ((gestureName === 'three' || gestureName === 'four') && thumbOut && extendedFingers === 4) {
-                return 5;
+            if ((gestureName === 'three' || gestureName === 'four' || gestureName === 'open_palm') && thumbOut) {
+                return 3; // five (open palm with thumb)
             }
             if (gestureName === 'fist' && thumbOut && extendedFingers === 0) {
-                return 6;
+                return 4; // thumbs up
             }
 
-            return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
-                ? GESTURE_NAME_TO_INDEX[gestureName]
-                : -1;
+            var idx = GESTURE_NAME_TO_INDEX[gestureName];
+            return (idx !== undefined && idx >= 0) ? idx : -1;
         }
 
-        if (thumbOut && extendedFingers === 0) return 6;
-        if (extendedFingers === 4 && thumbOut) return 5;
+        if (thumbOut && extendedFingers === 0) return 4; // thumbs up
+        if (extendedFingers >= 3 && thumbOut) return 3;  // five
         if (!thumbOut) {
-            if (extendedFingers === 0) return 0;
-            if (extendedFingers === 2) return 2;
-            if (extendedFingers === 1) return 1;
-            if (extendedFingers === 3) return 3;
-            if (extendedFingers === 4) return 4;
+            if (extendedFingers === 0) return 0; // fist
+            if (extendedFingers === 1) return 1; // one
+            if (extendedFingers === 2) return 2; // two
+            if (extendedFingers >= 3) return 3;  // treat 3-4 fingers as five
         }
         return -1;
     }
