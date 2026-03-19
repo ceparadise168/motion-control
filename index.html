@@ -281,7 +281,7 @@
         .task-panel {
             display: flex; gap: 12px;
             justify-content: center;
-            flex-wrap: wrap;
+            align-items: stretch;
             margin-top: 10px;
         }
 
@@ -293,7 +293,12 @@
             border-radius: 12px;
             padding: 12px 16px;
             text-align: center;
-            min-width: min(100px, 28vw);
+            width: min(100px, 28vw);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
@@ -334,7 +339,11 @@
 
         .task-card .gesture-icon {
             font-size: clamp(2rem, 5vw, 3rem);
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: clamp(2.4rem, 6vw, 3.6rem);
+            line-height: 1;
             margin-bottom: 6px;
         }
 
