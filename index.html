@@ -1096,6 +1096,7 @@
                 <div class="help-gesture-item"><span class="emoji">🖐️</span><span class="label">五根手指</span></div>
                 <div class="help-gesture-item"><span class="emoji">🤙</span><span class="label">六</span></div>
                 <div class="help-gesture-item"><span class="emoji">🖖</span><span class="label">瓦肯</span></div>
+                <div class="help-gesture-item"><span class="emoji">🤘</span><span class="label">搖滾</span></div>
             </div>
             <div class="help-easter-egg" id="helpEasterEgg">🐱</div>
             <button class="help-close-btn" onclick="toggleHelp()">知道了</button>
@@ -1362,9 +1363,9 @@
     // ============================================================
     // CONFIG
     // ============================================================
-    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83E\uDD19', '\uD83D\uDD96'];
-    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Six (4)', 'Vulcan (5)'];
-    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '六六大順', '生生不息'];
+    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83E\uDD19', '\uD83D\uDD96', '\uD83E\uDD18'];
+    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Six (4)', 'Vulcan (5)', 'Rock (6)'];
+    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '六六大順', '生生不息', '搖滾'];
     const FIXED_GESTURES = [1, 2, 0];
     const CHARGE_DURATION = 900;
 
@@ -2170,6 +2171,15 @@
         return thumbOut && pinkyOut && indexCurled && middleCurled && ringCurled;
     }
 
+    function isRock(landmarks) {
+        // Rock: index + pinky extended, middle + ring curled
+        var indexOut = isFingerExtended(landmarks, 5, 6, 8);
+        var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
+        var middleCurled = !isFingerExtended(landmarks, 9, 10, 12);
+        var ringCurled = !isFingerExtended(landmarks, 13, 14, 16);
+        return indexOut && pinkyOut && middleCurled && ringCurled;
+    }
+
     function isVulcan(landmarks) {
         var indexOut = isFingerExtended(landmarks, 5, 6, 8);
         var middleOut = isFingerExtended(landmarks, 9, 10, 12);
@@ -2194,6 +2204,9 @@
 
         // Six: thumb + pinky out, others curled
         if (isSix(landmarks, handedness)) return 4;
+
+        // Rock: index + pinky out, middle + ring curled
+        if (isRock(landmarks)) return 6;
 
         // Vulcan: all fingers out with middle-ring split
         if (isVulcan(landmarks)) return 5;
