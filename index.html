@@ -1357,7 +1357,7 @@
     const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Six (4)', 'Vulcan (5)'];
     const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '六六大順', '生生不息'];
     const FIXED_GESTURES = [1, 2, 0];
-    const CHARGE_DURATION = 1200;
+    const CHARGE_DURATION = 900;
 
     // ============================================================
     // DOM REFS
@@ -1400,8 +1400,7 @@
         gameState.currentGesture = -1;
         gameState.chargeStart = 0;
         gameState.chargingGesture = -1;
-        stableRaw = -1;
-        stableCount = 0;
+        stableHistory = [];
         stableConfirmed = -1;
         revealCooldown = false;
         wrongHintIndex = 0;
@@ -1989,29 +1988,50 @@
     const GESTURE_MIN_SCORE = 8.0;
 
     // ============================================================
-    // STABILIZER (debounce)
+    // STABILIZER (sliding window majority vote)
     // ============================================================
-    const STABLE_FRAMES_REQUIRED = 10;
-    let stableRaw = -1;
-    let stableCount = 0;
+    const STABLE_WINDOW = 10;
+    const STABLE_THRESHOLD = 7;
+    let stableHistory = [];
     let stableConfirmed = -1;
 
     function stabilize(raw) {
-        if (raw === stableRaw) {
-            stableCount++;
-        } else {
-            stableRaw = raw;
-            stableCount = 1;
+        stableHistory.push(raw);
+        if (stableHistory.length > STABLE_WINDOW) stableHistory.shift();
+
+        // Count occurrences in window
+        var counts = {};
+        for (var i = 0; i < stableHistory.length; i++) {
+            var g = stableHistory[i];
+            counts[g] = (counts[g] || 0) + 1;
         }
-        if (stableCount >= STABLE_FRAMES_REQUIRED) {
-            stableConfirmed = raw;
+
+        // Find the gesture with the most votes
+        var bestG = -1, bestCount = 0;
+        for (var key in counts) {
+            if (counts[key] > bestCount) {
+                bestCount = counts[key];
+                bestG = Number(key);
+            }
+        }
+
+        if (bestCount >= STABLE_THRESHOLD) {
+            stableConfirmed = bestG;
         }
         return stableConfirmed;
     }
 
     // ============================================================
-    // GESTURE RECOGNITION
+    // GESTURE RECOGNITION (v2 — 2D only, multi-joint, per-finger thresholds)
     // ============================================================
+
+    // 2D distance — ignores noisy Z axis from webcam
+    function dist2D(a, b) {
+        var dx = a.x - b.x, dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // 3D distance — only used where Z matters (fingerpose compat)
     function dist(a, b) {
         return Math.sqrt(
             Math.pow(a.x - b.x, 2) +
@@ -2020,6 +2040,17 @@
         );
     }
 
+    function angleDeg2D(a, b, c) {
+        var bax = a.x - b.x, bay = a.y - b.y;
+        var bcx = c.x - b.x, bcy = c.y - b.y;
+        var dot = bax * bcx + bay * bcy;
+        var magBA = Math.sqrt(bax * bax + bay * bay);
+        var magBC = Math.sqrt(bcx * bcx + bcy * bcy);
+        if (magBA === 0 || magBC === 0) return 0;
+        return Math.acos(Math.max(-1, Math.min(1, dot / (magBA * magBC)))) * 180 / Math.PI;
+    }
+
+    // Keep 3D version for fingerpose compatibility
     function angleDeg(a, b, c) {
         var ba = { x: a.x - b.x, y: a.y - b.y, z: (a.z||0) - (b.z||0) };
         var bc = { x: c.x - b.x, y: c.y - b.y, z: (c.z||0) - (b.z||0) };
@@ -2027,33 +2058,62 @@
         var magBA = Math.sqrt(ba.x*ba.x + ba.y*ba.y + ba.z*ba.z);
         var magBC = Math.sqrt(bc.x*bc.x + bc.y*bc.y + bc.z*bc.z);
         if (magBA === 0 || magBC === 0) return 0;
-        var cosAngle = Math.max(-1, Math.min(1, dot / (magBA * magBC)));
-        return Math.acos(cosAngle) * 180 / Math.PI;
+        return Math.acos(Math.max(-1, Math.min(1, dot / (magBA * magBC)))) * 180 / Math.PI;
     }
 
+    function getPalmCenter2D(landmarks) {
+        var ix = landmarks[5], px = landmarks[17], wr = landmarks[0];
+        return { x: (ix.x + px.x + wr.x) / 3, y: (ix.y + px.y + wr.y) / 3 };
+    }
+
+    function getPalmWidth(landmarks) {
+        return dist2D(landmarks[5], landmarks[17]);
+    }
+
+    // Per-finger angle thresholds (ring & pinky are more relaxed)
+    //                          index, middle, ring, pinky
+    var FINGER_ANGLE_THRESH = [135,   135,    125,  120];
+    // Landmark indices:        [mcp, pip, dip, tip]
+    var FINGER_LANDMARKS = [
+        [5, 6, 7, 8],    // index
+        [9, 10, 11, 12],  // middle
+        [13, 14, 15, 16], // ring
+        [17, 18, 19, 20]  // pinky
+    ];
+
     function isFingerExtended(landmarks, mcp, pip, tip) {
-        var angle = angleDeg(landmarks[mcp], landmarks[pip], landmarks[tip]);
-        return angle > 140;
+        // Find which finger this is to get correct threshold
+        var fingerIdx = 0;
+        for (var i = 0; i < FINGER_LANDMARKS.length; i++) {
+            if (FINGER_LANDMARKS[i][0] === mcp) { fingerIdx = i; break; }
+        }
+        var threshold = FINGER_ANGLE_THRESH[fingerIdx];
+        var fl = FINGER_LANDMARKS[fingerIdx];
+
+        // Check two joint angles (PIP and DIP)
+        var pipAngle = angleDeg2D(landmarks[fl[0]], landmarks[fl[1]], landmarks[fl[2]]);
+        var dipAngle = angleDeg2D(landmarks[fl[1]], landmarks[fl[2]], landmarks[fl[3]]);
+
+        // Finger is extended if both joints are relatively straight
+        var anglesOk = pipAngle > threshold && dipAngle > threshold;
+
+        // Also check: fingertip is far enough from palm center
+        var palmCenter = getPalmCenter2D(landmarks);
+        var palmW = getPalmWidth(landmarks);
+        var tipDist = dist2D(landmarks[fl[3]], palmCenter);
+        var distOk = tipDist > palmW * 0.8;
+
+        // Pass if angle check passes OR distance check passes (either signal is enough)
+        return anglesOk || (pipAngle > (threshold - 15) && distOk);
     }
 
     function isThumbExtended(landmarks, handedness) {
-        var thumbTip = landmarks[4];
-        var thumbIp = landmarks[3];
-        var thumbMcp = landmarks[2];
-        var indexMcp = landmarks[5];
-        var pinkyMcp = landmarks[17];
+        var thumbAngle = angleDeg2D(landmarks[2], landmarks[3], landmarks[4]);
+        var palmCenter = getPalmCenter2D(landmarks);
+        var palmW = getPalmWidth(landmarks);
+        var thumbDist = dist2D(landmarks[4], palmCenter);
 
-        var thumbAngle = angleDeg(landmarks[2], landmarks[3], landmarks[4]);
-
-        var palmCx = (indexMcp.x + pinkyMcp.x) / 2;
-        var palmCy = (indexMcp.y + pinkyMcp.y) / 2;
-        var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0)) / 2;
-        var palmCenter = { x: palmCx, y: palmCy, z: palmCz };
-
-        var palmWidth = dist(indexMcp, pinkyMcp);
-        var thumbDist = dist(thumbTip, palmCenter);
-
-        return thumbAngle > 150 && thumbDist > palmWidth * 1.0;
+        return thumbAngle > 140 && thumbDist > palmW * 0.9;
     }
 
     function countExtendedFingers(landmarks) {
@@ -2066,24 +2126,15 @@
     }
 
     function isFist(landmarks) {
-        var indexMcp = landmarks[5];
-        var pinkyMcp = landmarks[17];
-        var wrist = landmarks[0];
-
-        var palmCx = (indexMcp.x + pinkyMcp.x + wrist.x) / 3;
-        var palmCy = (indexMcp.y + pinkyMcp.y + wrist.y) / 3;
-        var palmCz = ((indexMcp.z||0) + (pinkyMcp.z||0) + (wrist.z||0)) / 3;
-        var palmCenter = { x: palmCx, y: palmCy, z: palmCz };
-
-        var palmWidth = dist(indexMcp, pinkyMcp);
-        if (palmWidth === 0) return false;
+        var palmCenter = getPalmCenter2D(landmarks);
+        var palmW = getPalmWidth(landmarks);
+        if (palmW === 0) return false;
 
         var tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
         var allClose = tips.every(function(tip) {
-            return dist(tip, palmCenter) < palmWidth * 1.2;
+            return dist2D(tip, palmCenter) < palmW * 1.2;
         });
-
-        var thumbClose = dist(landmarks[4], palmCenter) < palmWidth * 1.3;
+        var thumbClose = dist2D(landmarks[4], palmCenter) < palmW * 1.3;
 
         return allClose && thumbClose;
     }
@@ -2098,18 +2149,15 @@
     }
 
     function isVulcan(landmarks) {
-        // Vulcan: all 4 fingers extended, split between middle and ring
         var indexOut = isFingerExtended(landmarks, 5, 6, 8);
         var middleOut = isFingerExtended(landmarks, 9, 10, 12);
         var ringOut = isFingerExtended(landmarks, 13, 14, 16);
         var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
         if (!indexOut || !middleOut || !ringOut || !pinkyOut) return false;
 
-        // Check gap between middle(12) and ring(16) fingertips is wider than
-        // gap between index(8) and middle(12)
-        var indexMiddleGap = dist(landmarks[8], landmarks[12]);
-        var middleRingGap = dist(landmarks[12], landmarks[16]);
-        var ringPinkyGap = dist(landmarks[16], landmarks[20]);
+        var indexMiddleGap = dist2D(landmarks[8], landmarks[12]);
+        var middleRingGap = dist2D(landmarks[12], landmarks[16]);
+        var ringPinkyGap = dist2D(landmarks[16], landmarks[20]);
         return middleRingGap > indexMiddleGap * 1.3 && middleRingGap > ringPinkyGap * 1.3;
     }
 
