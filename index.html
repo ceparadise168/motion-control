@@ -419,10 +419,10 @@
             opacity: 1;
             filter: drop-shadow(0 0 30px rgba(0, 255, 136, 0.8));
             animation: numberPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-            font-family: 'Exo', sans-serif;
+            font-family: 'Exo', 'Helvetica Neue', Arial, sans-serif;
             font-weight: 900;
-            font-variant-emoji: text;
             color: var(--neon-green);
+            -webkit-text-fill-color: var(--neon-green);
             text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
         }
 
@@ -1581,7 +1581,11 @@
             // Step 2: Switch to number display
             detectedGestureEl.classList.remove('correct');
             detectedGestureEl.classList.add('show-number');
-            detectedGestureEl.textContent = String(task.gesture) + '\uFE0E';
+            detectedGestureEl.textContent = '';
+            var numSpan = document.createElement('span');
+            numSpan.textContent = String(task.gesture);
+            numSpan.style.cssText = 'font-family:Exo,Helvetica Neue,Arial,sans-serif;-webkit-text-fill-color:var(--neon-green)';
+            detectedGestureEl.appendChild(numSpan);
 
             setTimeout(function() {
                 // Step 3: Hide center display, update card
@@ -1615,7 +1619,7 @@
                         revealCooldown = false;
                     }
                 });
-            }, 2200);
+            }, 1800);
         }, 800);
     }
 
