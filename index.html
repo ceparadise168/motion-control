@@ -1176,9 +1176,9 @@
     // ============================================================
     // CONFIG
     // ============================================================
-    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83E\uDD1F', '\uD83D\uDD96', '\uD83D\uDD90\uFE0F'];
-    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Three (3)', 'Four (4)', 'Five (5)'];
-    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '也不是這個', '再加油一下', '不是這個'];
+    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83E\uDD1F', '\uD83D\uDD96', '\uD83D\uDD90\uFE0F', '\uD83D\uDC4D'];
+    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Three (3)', 'Four (4)', 'Five (5)', 'Thumbs Up (6)'];
+    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '也不是這個', '再加油一下', '不是這個', '讚'];
     const FIXED_GESTURES = [1, 2, 0];
     const CHARGE_DURATION = 1200;
 
@@ -1797,7 +1797,7 @@
 
     const GESTURE_NAME_TO_INDEX = {
         'fist': 0, 'one': 1, 'two': 2, 'three': 3,
-        'four': 4, 'open_palm': 5, 'thumbs_up': -1
+        'four': 4, 'open_palm': 5, 'thumbs_up': 6
     };
     const GESTURE_MIN_SCORE = 8.0;
 
@@ -1929,7 +1929,7 @@
                 return 5;
             }
             if (gestureName === 'fist' && thumbOut && extendedFingers === 0) {
-                return -1;
+                return 6;
             }
 
             return GESTURE_NAME_TO_INDEX[gestureName] !== undefined
