@@ -2228,7 +2228,11 @@
         // Vulcan: all fingers out with middle-ring split
         if (isVulcan(landmarks)) return 5;
 
-        if (fist) return 0;
+        if (fist) {
+            var fistCheck = disambiguateFistVsOne(landmarks);
+            if (fistCheck === 'one') return 1;
+            return 0;
+        }
 
         if (result.gestures.length > 0) {
             let best = result.gestures[0];
