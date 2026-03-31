@@ -1418,7 +1418,7 @@
         successScreen.style.display = 'none';
         successScreen.classList.remove('fade-in');
         speedLines.style.opacity = '0';
-        detectedGestureEl.textContent = '\uD83E\uDD14';
+        detectedGestureEl.textContent = '?';
         detectedGestureEl.classList.remove('matching');
         updateProgressRing(0);
         hintText.textContent = '比一個手勢來猜猜看';
@@ -1517,7 +1517,7 @@
             }
         } else {
             detectedGestureEl.classList.remove('matching');
-            detectedGestureEl.textContent = '\uD83E\uDD14';
+            detectedGestureEl.textContent = '?';
             resetCharge();
             gameState.tasks.forEach((t, i) => {
                 document.getElementById('task-card-' + i).classList.remove('active');
@@ -1600,7 +1600,7 @@
         setTimeout(function() {
             numberOverlay.classList.remove('show');
             detectedGestureEl.style.opacity = '';
-            detectedGestureEl.textContent = '\uD83E\uDD14';
+            detectedGestureEl.textContent = '?';
 
             playSlotReel(taskIndex, task.gesture, function() {
                 var card = document.getElementById('task-card-' + taskIndex);
@@ -1709,7 +1709,7 @@
         setTimeout(() => {
             revealCooldown = false;
             detectedGestureEl.classList.remove('wrong');
-            detectedGestureEl.textContent = '\uD83E\uDD14';
+            detectedGestureEl.textContent = '?';
             ringContainer.classList.remove('wrong');
             wrongHintEl.classList.remove('show');
             const uncollected = gameState.tasks.filter(t => !t.collected);
@@ -1913,7 +1913,7 @@
     function onGestureResult(result) {
         if (!result.landmarks || result.landmarks.length === 0) {
             if (gameState.phase === 'PLAYING') {
-                detectedGestureEl.textContent = '\uD83E\uDD14';
+                detectedGestureEl.textContent = '?';
                 detectedGestureEl.classList.remove('matching');
                 wrongHintEl.classList.remove('show');
                 resetCharge();
