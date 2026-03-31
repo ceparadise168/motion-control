@@ -1492,6 +1492,7 @@
                 }
                 detectedGestureEl.classList.add('matching');
                 detectedGestureEl.textContent = GESTURE_ICONS[detectedFingers];
+                wrongHintEl.classList.remove('show');
 
                 const matchingTask = gameState.tasks.find(t => t.gesture === detectedFingers && !t.collected);
                 gameState.tasks.forEach((t, i) => {
@@ -1507,7 +1508,8 @@
                 resetCharge();
                 detectedGestureEl.classList.add('matching');
                 detectedGestureEl.textContent = '?';
-                hintText.textContent = '換一個手勢試試';
+                wrongHintEl.textContent = '換一個手勢試試';
+                wrongHintEl.classList.add('show');
 
                 gameState.tasks.forEach((t, i) => {
                     document.getElementById('task-card-' + i).classList.remove('active');
@@ -1913,6 +1915,7 @@
             if (gameState.phase === 'PLAYING') {
                 detectedGestureEl.textContent = '?';
                 detectedGestureEl.classList.remove('matching');
+                wrongHintEl.classList.remove('show');
                 resetCharge();
                 gameState.tasks.forEach((t, i) => {
                     document.getElementById('task-card-' + i).classList.remove('active');
