@@ -1133,8 +1133,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
     <script>
@@ -1865,33 +1863,43 @@
             (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
     }
 
-    function initCamera() {
+    let gestureRecognizer = null;
+
+    async function initCamera() {
         if (cameraStarted) return;
         cameraStarted = true;
 
         const videoElement = document.querySelector('.camera-video');
         const mobile = isMobile();
 
-        const hands = new Hands({
-            locateFile: function(file) {
-                return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/' + file;
-            }
-        });
+        const { GestureRecognizer, FilesetResolver } = await import(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs'
+        );
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: mobile ? 0 : 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.6,
-        });
+        const vision = await FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        );
 
-        hands.onResults(onHandResults);
+        gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+                delegate: mobile ? 'CPU' : 'GPU'
+            },
+            runningMode: 'VIDEO',
+            numHands: 1,
+            minHandDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.6
+        });
 
         const camWidth = mobile ? 640 : 1280;
         const camHeight = mobile ? 480 : 720;
 
         const cam = new Camera(videoElement, {
-            onFrame: async function() { await hands.send({ image: videoElement }); },
+            onFrame: async function() {
+                if (!gestureRecognizer) return;
+                const result = gestureRecognizer.recognizeForVideo(videoElement, performance.now());
+                onGestureResult(result);
+            },
             width: camWidth,
             height: camHeight,
             facingMode: 'user',
@@ -1899,8 +1907,8 @@
         cam.start();
     }
 
-    function onHandResults(results) {
-        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    function onGestureResult(result) {
+        if (!result.landmarks || result.landmarks.length === 0) {
             if (gameState.phase === 'PLAYING') {
                 detectedGestureEl.textContent = '?';
                 detectedGestureEl.classList.remove('matching');
@@ -1913,87 +1921,34 @@
             return;
         }
 
-        const landmarks = results.multiHandLandmarks[0];
-        const handedness = results.multiHandedness[0].label;
-        const rawGesture = recognizeGesture(landmarks, handedness);
+        const rawGesture = mapGesture(result);
         const gesture = stabilize(rawGesture);
 
         updateCharge(gesture, true);
     }
 
     // ============================================================
-    // FINGERPOSE GESTURE DEFINITIONS
+    // GESTURE MAPPING
     // ============================================================
-    const fistGesture = new fp.GestureDescription('fist');
-    fistGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
-    fistGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
-    fistGesture.addCurl(fp.Finger.Index, fp.FingerCurl.FullCurl, 1.0);
-    fistGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
-    fistGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
-    fistGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+    function mapGesture(result) {
+        if (!result.gestures || result.gestures.length === 0) return -1;
 
-    const twoGesture = new fp.GestureDescription('two');
-    twoGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.HalfCurl, 0.9);
-    twoGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
-    twoGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.HalfCurl, 0.9);
+        var gesture = result.gestures[0][0];
+        var name = gesture.categoryName;
+        var landmarks = result.landmarks[0];
 
-    const oneGesture = new fp.GestureDescription('one');
-    oneGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
-    oneGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
-    oneGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-    oneGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
-    oneGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
-    oneGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
+        if (name === 'Open_Palm') {
+            return isVulcan(landmarks) ? 9 : 5;
+        }
 
-    const threeGesture = new fp.GestureDescription('three');
-    threeGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
-    threeGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.HalfCurl, 0.9);
+        var map = {
+            'Closed_Fist': 0,
+            'Pointing_Up': 1,
+            'Victory': 2
+        };
 
-    const fourGesture = new fp.GestureDescription('four');
-    fourGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
-    fourGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 1.0);
-    fourGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-    fourGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-    fourGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
-    fourGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.NoCurl, 1.0);
-
-    const openPalmGesture = new fp.GestureDescription('open_palm');
-    openPalmGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 1.0);
-    openPalmGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-    openPalmGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-    openPalmGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.NoCurl, 1.0);
-    openPalmGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.NoCurl, 1.0);
-
-    const thumbsUpGesture = new fp.GestureDescription('thumbs_up');
-    thumbsUpGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 1.0);
-    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.VerticalUp, 1.0);
-    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.DiagonalUpLeft, 0.9);
-    thumbsUpGesture.addDirection(fp.Finger.Thumb, fp.FingerDirection.DiagonalUpRight, 0.9);
-    thumbsUpGesture.addCurl(fp.Finger.Index, fp.FingerCurl.FullCurl, 1.0);
-    thumbsUpGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 1.0);
-    thumbsUpGesture.addCurl(fp.Finger.Ring, fp.FingerCurl.FullCurl, 1.0);
-    thumbsUpGesture.addCurl(fp.Finger.Pinky, fp.FingerCurl.FullCurl, 1.0);
-
-    const gestureEstimator = new fp.GestureEstimator([
-        fistGesture, oneGesture, twoGesture, threeGesture,
-        fourGesture, openPalmGesture, thumbsUpGesture
-    ]);
-
-    const GESTURE_NAME_TO_INDEX = {
-        'fist': 0, 'one': 1, 'two': 2, 'three': -1,
-        'four': -1, 'open_palm': 3, 'thumbs_up': -1
-    };
-    const GESTURE_MIN_SCORE = 8.0;
+        return map[name] !== undefined ? map[name] : -1;
+    }
 
     // ============================================================
     // STABILIZER (sliding window majority vote)
