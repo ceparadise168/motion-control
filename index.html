@@ -1507,6 +1507,7 @@
                 resetCharge();
                 detectedGestureEl.classList.add('matching');
                 detectedGestureEl.textContent = '?';
+                hintText.textContent = '換一個手勢試試';
 
                 gameState.tasks.forEach((t, i) => {
                     document.getElementById('task-card-' + i).classList.remove('active');
