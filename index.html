@@ -2162,6 +2162,23 @@
         return (allClose || allCurled) && thumbNotOut;
     }
 
+    function disambiguateFistVsOne(landmarks) {
+        var palmCenter = getPalmCenter2D(landmarks);
+        var indexDist = dist2D(landmarks[8], palmCenter);
+        var middleDist = dist2D(landmarks[12], palmCenter);
+        var ringDist = dist2D(landmarks[16], palmCenter);
+        var pinkyDist = dist2D(landmarks[20], palmCenter);
+
+        var otherAvg = Math.max((middleDist + ringDist + pinkyDist) / 3, 0.001);
+        var outlierRatio = indexDist / otherAvg;
+
+        console.log('[disambiguate] outlierRatio:', outlierRatio.toFixed(2));
+
+        if (outlierRatio > 1.8) return 'one';
+        if (outlierRatio < 1.3) return 'fist';
+        return 'ambiguous';
+    }
+
     function isSix(landmarks, handedness) {
         var thumbOut = isThumbExtended(landmarks, handedness);
         var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
