@@ -31,22 +31,25 @@ Core insight: when showing "1", the index fingertip is an outlier — significan
    - `pinkyDist` = distance(landmark[20], palmCenter)
 3. Compute average distance of the other 3 fingers:
    - `otherAvg` = (middleDist + ringDist + pinkyDist) / 3
-4. Compute outlier ratio:
+4. Compute outlier ratio (with division-by-zero guard):
+   - `otherAvg` = max(otherAvg, 0.001)
    - `outlierRatio` = indexDist / otherAvg
 5. Decision:
    - `outlierRatio > 1.8` → return `"one"` (index clearly extended)
    - `outlierRatio < 1.3` → return `"fist"` (all fingertips similarly clustered)
    - Between 1.3 and 1.8 → return `"ambiguous"` (defer to original detection)
 
-Thresholds 1.8 and 1.3 are initial values subject to tuning.
+Thresholds 1.8 and 1.3 are initial values subject to tuning. In development, log `outlierRatio` to console to observe actual value distributions and guide threshold adjustments.
 
 ### Integration into `recognizeGesture()`
 
-The disambiguation function is called at two points:
+The disambiguation function is called at three points:
 
 1. **After `isFist()` returns true:** Run `disambiguateFistVsOne()`. If result is `"one"`, override to gesture 1. If `"ambiguous"` or `"fist"`, keep gesture 0.
 
-2. **After fallback logic determines gesture 1:** Run `disambiguateFistVsOne()`. If result is `"fist"`, override to gesture 0. If `"ambiguous"` or `"one"`, keep gesture 1.
+2. **After FingerPose classifier determines gesture 0 or 1:** Run `disambiguateFistVsOne()`. If the disambiguation result contradicts the classifier, override. If `"ambiguous"`, keep the classifier result.
+
+3. **After fallback logic determines gesture 1:** Run `disambiguateFistVsOne()`. If result is `"fist"`, override to gesture 0. If `"ambiguous"` or `"one"`, keep gesture 1.
 
 ### What is NOT changed
 
