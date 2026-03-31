@@ -2245,8 +2245,11 @@
             var gestureName = best.name;
 
             if (gestureName === 'open_palm' && !thumbOut) {
-                // Without thumb: map by finger count (only 1 and 2 have indices)
-                if (extendedFingers === 1) return 1;
+                if (extendedFingers === 1) {
+                    var fpOneCheck = disambiguateFistVsOne(landmarks);
+                    if (fpOneCheck === 'fist') return 0;
+                    return 1;
+                }
                 if (extendedFingers === 2) return 2;
                 return -1;
             }
