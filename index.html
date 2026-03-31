@@ -1363,9 +1363,9 @@
     // ============================================================
     // CONFIG
     // ============================================================
-    const GESTURE_ICONS = ['\u270A', '\u261D\uFE0F', '\u270C\uFE0F', '\uD83D\uDD90\uFE0F', '\uD83E\uDD19', '\uD83D\uDD96', '\uD83E\uDD18'];
-    const GESTURE_NAMES = ['Fist (0)', 'One (1)', 'Two (2)', 'Five (3)', 'Six (4)', 'Vulcan (5)', 'Rock (6)'];
-    const THEME_LABELS_ZH = ['勢在必行', '自省', '覺醒', '不是這個', '六六大順', '生生不息', '搖滾'];
+    const GESTURE_ICONS = {0: '\u270A', 1: '\u261D\uFE0F', 2: '\u270C\uFE0F', 5: '\uD83D\uDD90\uFE0F', 9: '\uD83D\uDD96'};
+    const GESTURE_NAMES = {0: 'Fist (0)', 1: 'One (1)', 2: 'Two (2)', 5: 'Five (5)', 9: 'Vulcan (9)'};
+    const THEME_LABELS_ZH = {0: '勢在必行', 1: '自省', 2: '覺醒', 5: '不是這個', 9: '生生不息'};
     const FIXED_GESTURES = [1, 2, 0];
     const CHARGE_DURATION = 900;
 
@@ -1474,7 +1474,7 @@
     // ============================================================
     // CHARGE LOGIC
     // ============================================================
-    const GESTURE_NAMES_ZH = ['拳頭', '一根手指', '兩根手指', '三根手指', '四根手指', '手掌'];
+    const GESTURE_NAMES_ZH = {0: '拳頭', 1: '一根手指', 2: '兩根手指', 5: '手掌', 9: '瓦肯'};
     const WRONG_GESTURE_HINTS = ['不是這個，換一個試試！', '這個不對喔，試別的！', '猜錯了，再換一個！'];
     let wrongHintIndex = 0;
     let revealCooldown = false;
@@ -1547,7 +1547,7 @@
     function playSlotReel(taskIndex, finalGesture, callback) {
         const card = document.getElementById('task-card-' + taskIndex);
         const iconEl = card.querySelector('.gesture-icon');
-        const allIcons = GESTURE_ICONS.slice();
+        const allIcons = Object.values(GESTURE_ICONS);
         let spinCount = 0;
         const totalSpins = 5;
         const baseInterval = 50;
@@ -1674,7 +1674,7 @@
         resetCharge();
 
         // Safety: skip if gesture index is invalid
-        if (wrongG < 0 || wrongG >= GESTURE_ICONS.length) {
+        if (wrongG < 0 || !GESTURE_ICONS[wrongG]) {
             revealCooldown = false;
             return;
         }
