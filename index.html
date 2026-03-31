@@ -2266,8 +2266,16 @@
         if (thumbOut && extendedFingers === 0) return 0; // likely fist with thumb out
         if (extendedFingers >= 3 && thumbOut) return 3;  // five
         if (!thumbOut) {
-            if (extendedFingers === 0) return 0; // fist
-            if (extendedFingers === 1) return 1; // one
+            if (extendedFingers === 0) {
+                var fbFistCheck = disambiguateFistVsOne(landmarks);
+                if (fbFistCheck === 'one') return 1;
+                return 0;
+            }
+            if (extendedFingers === 1) {
+                var fbOneCheck = disambiguateFistVsOne(landmarks);
+                if (fbOneCheck === 'fist') return 0;
+                return 1;
+            }
             if (extendedFingers === 2) return 2; // two
             if (extendedFingers >= 3) return 3;  // treat 3-4 fingers as five
         }
