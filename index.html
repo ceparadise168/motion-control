@@ -2013,17 +2013,6 @@
         return Math.acos(Math.max(-1, Math.min(1, dot / (magBA * magBC)))) * 180 / Math.PI;
     }
 
-    // Keep 3D version for fingerpose compatibility
-    function angleDeg(a, b, c) {
-        var ba = { x: a.x - b.x, y: a.y - b.y, z: (a.z||0) - (b.z||0) };
-        var bc = { x: c.x - b.x, y: c.y - b.y, z: (c.z||0) - (b.z||0) };
-        var dot = ba.x * bc.x + ba.y * bc.y + ba.z * bc.z;
-        var magBA = Math.sqrt(ba.x*ba.x + ba.y*ba.y + ba.z*ba.z);
-        var magBC = Math.sqrt(bc.x*bc.x + bc.y*bc.y + bc.z*bc.z);
-        if (magBA === 0 || magBC === 0) return 0;
-        return Math.acos(Math.max(-1, Math.min(1, dot / (magBA * magBC)))) * 180 / Math.PI;
-    }
-
     function getPalmCenter2D(landmarks) {
         var ix = landmarks[5], px = landmarks[17], wr = landmarks[0];
         return { x: (ix.x + px.x + wr.x) / 3, y: (ix.y + px.y + wr.y) / 3 };
@@ -2070,86 +2059,6 @@
         return anglesOk || (pipAngle > (threshold - 15) && distOk);
     }
 
-    function isThumbExtended(landmarks, handedness) {
-        var thumbAngle = angleDeg2D(landmarks[2], landmarks[3], landmarks[4]);
-        var palmCenter = getPalmCenter2D(landmarks);
-        var palmW = getPalmWidth(landmarks);
-        var thumbDist = dist2D(landmarks[4], palmCenter);
-
-        return thumbAngle > 140 && thumbDist > palmW * 0.9;
-    }
-
-    function countExtendedFingers(landmarks) {
-        var count = 0;
-        if (isFingerExtended(landmarks, 5, 6, 8)) count++;
-        if (isFingerExtended(landmarks, 9, 10, 12)) count++;
-        if (isFingerExtended(landmarks, 13, 14, 16)) count++;
-        if (isFingerExtended(landmarks, 17, 18, 20)) count++;
-        return count;
-    }
-
-    function isFist(landmarks) {
-        var palmCenter = getPalmCenter2D(landmarks);
-        var palmW = getPalmWidth(landmarks);
-        if (palmW === 0) return false;
-
-        // Strategy 1: all fingertips close to palm center (distance-based)
-        var tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
-        var allClose = tips.every(function(tip) {
-            return dist2D(tip, palmCenter) < palmW * 1.5;
-        });
-
-        // Strategy 2: all fingers have curled joints (angle-based)
-        var allCurled = true;
-        for (var i = 0; i < FINGER_LANDMARKS.length; i++) {
-            var fl = FINGER_LANDMARKS[i];
-            var pipAngle = angleDeg2D(landmarks[fl[0]], landmarks[fl[1]], landmarks[fl[2]]);
-            if (pipAngle > 130) { allCurled = false; break; }
-        }
-
-        // Thumb: not significantly extended (more lenient than isThumbExtended)
-        var thumbDist = dist2D(landmarks[4], palmCenter);
-        var thumbNotOut = thumbDist < palmW * 1.5;
-
-        // Pass if either strategy works + thumb is not way out
-        return (allClose || allCurled) && thumbNotOut;
-    }
-
-    function disambiguateFistVsOne(landmarks) {
-        var palmCenter = getPalmCenter2D(landmarks);
-        var indexDist = dist2D(landmarks[8], palmCenter);
-        var middleDist = dist2D(landmarks[12], palmCenter);
-        var ringDist = dist2D(landmarks[16], palmCenter);
-        var pinkyDist = dist2D(landmarks[20], palmCenter);
-
-        var otherAvg = Math.max((middleDist + ringDist + pinkyDist) / 3, 0.001);
-        var outlierRatio = indexDist / otherAvg;
-
-        console.log('[disambiguate] outlierRatio:', outlierRatio.toFixed(2));
-
-        if (outlierRatio > 1.8) return 'one';
-        if (outlierRatio < 1.3) return 'fist';
-        return 'ambiguous';
-    }
-
-    function isSix(landmarks, handedness) {
-        var thumbOut = isThumbExtended(landmarks, handedness);
-        var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
-        var indexCurled = !isFingerExtended(landmarks, 5, 6, 8);
-        var middleCurled = !isFingerExtended(landmarks, 9, 10, 12);
-        var ringCurled = !isFingerExtended(landmarks, 13, 14, 16);
-        return thumbOut && pinkyOut && indexCurled && middleCurled && ringCurled;
-    }
-
-    function isRock(landmarks) {
-        // Rock: index + pinky extended, middle + ring curled
-        var indexOut = isFingerExtended(landmarks, 5, 6, 8);
-        var pinkyOut = isFingerExtended(landmarks, 17, 18, 20);
-        var middleCurled = !isFingerExtended(landmarks, 9, 10, 12);
-        var ringCurled = !isFingerExtended(landmarks, 13, 14, 16);
-        return indexOut && pinkyOut && middleCurled && ringCurled;
-    }
-
     function isVulcan(landmarks) {
         var indexOut = isFingerExtended(landmarks, 5, 6, 8);
         var middleOut = isFingerExtended(landmarks, 9, 10, 12);
@@ -2161,81 +2070,6 @@
         var middleRingGap = dist2D(landmarks[12], landmarks[16]);
         var ringPinkyGap = dist2D(landmarks[16], landmarks[20]);
         return middleRingGap > indexMiddleGap * 1.3 && middleRingGap > ringPinkyGap * 1.3;
-    }
-
-    function recognizeGesture(landmarks, handedness) {
-        const converted = landmarks.map(lm => [lm.x * 640, lm.y * 480, lm.z * 640]);
-
-        const result = gestureEstimator.estimate(converted, GESTURE_MIN_SCORE);
-
-        var thumbOut = isThumbExtended(landmarks, handedness);
-        var extendedFingers = countExtendedFingers(landmarks);
-        var fist = isFist(landmarks);
-
-        // Six: thumb + pinky out, others curled
-        if (isSix(landmarks, handedness)) return 4;
-
-        // Rock: index + pinky out, middle + ring curled
-        if (isRock(landmarks)) return 6;
-
-        // Vulcan: all fingers out with middle-ring split
-        if (isVulcan(landmarks)) return 5;
-
-        if (fist) {
-            var fistCheck = disambiguateFistVsOne(landmarks);
-            if (fistCheck === 'one') return 1;
-            return 0;
-        }
-
-        if (result.gestures.length > 0) {
-            let best = result.gestures[0];
-            for (let i = 1; i < result.gestures.length; i++) {
-                if (result.gestures[i].score > best.score) {
-                    best = result.gestures[i];
-                }
-            }
-
-            var gestureName = best.name;
-
-            if (gestureName === 'open_palm' && !thumbOut) {
-                if (extendedFingers === 1) {
-                    var fpOneCheck = disambiguateFistVsOne(landmarks);
-                    if (fpOneCheck === 'fist') return 0;
-                    return 1;
-                }
-                if (extendedFingers === 2) return 2;
-                return -1;
-            }
-            if ((gestureName === 'three' || gestureName === 'four' || gestureName === 'open_palm') && thumbOut) {
-                return 3; // five (open palm with thumb)
-            }
-            if (gestureName === 'fist') {
-                var fpFistCheck = disambiguateFistVsOne(landmarks);
-                if (fpFistCheck === 'one') return 1;
-                return 0;
-            }
-
-            var idx = GESTURE_NAME_TO_INDEX[gestureName];
-            return (idx !== undefined && idx >= 0) ? idx : -1;
-        }
-
-        if (thumbOut && extendedFingers === 0) return 0; // likely fist with thumb out
-        if (extendedFingers >= 3 && thumbOut) return 3;  // five
-        if (!thumbOut) {
-            if (extendedFingers === 0) {
-                var fbFistCheck = disambiguateFistVsOne(landmarks);
-                if (fbFistCheck === 'one') return 1;
-                return 0;
-            }
-            if (extendedFingers === 1) {
-                var fbOneCheck = disambiguateFistVsOne(landmarks);
-                if (fbOneCheck === 'fist') return 0;
-                return 1;
-            }
-            if (extendedFingers === 2) return 2; // two
-            if (extendedFingers >= 3) return 3;  // treat 3-4 fingers as five
-        }
-        return -1;
     }
 
     // ============================================================
